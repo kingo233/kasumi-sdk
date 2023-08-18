@@ -6,6 +6,10 @@ from __future__ import annotations
 '''
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Iterator
+from .base_cls import TokenType
+from .embedding import KasumiEmbeddingItem, embedding_text, search_similarity, get_embedding_by_id, insert_embedding
+
+import threading
 
 class KasumiException(Exception):
     """
@@ -17,11 +21,16 @@ class KasumiConfigration(object):
     _token: str = ""
     _search_key: str = ""
     _kasumi_url: str = ""
+    _app_id: int = 0
 
-    def __init__(self, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
+    def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
+        self._app_id = app_id
         self._token = token
         self._search_key = search_key
         self._kasumi_url = kasumi_url
+
+    def get_app_id(self) -> int:
+        return self._app_id
 
     def get_token(self) -> str:
         return self._token
@@ -40,7 +49,6 @@ class KasumiSearchResultField(object):
     _llm_disabled: this field will not be sent to the LLM if this is set to True.
     _show_disabled: this field will not be shown to the client if this is set to True.
     """
-
     _key: str = ""
     _content: str = ""
     _llm_disabled: bool = False
@@ -117,9 +125,12 @@ class KasumiSearchStrategy(ABC):
     def search(self, app: 'Kasumi', column: str, value: str) -> Iterator[KasumiSearchResult]:
         spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
         for spider in spiders:
-            yield from spider.search(column, value)
+            results = spider.search(column, value)
+            if len(results) > 0:
+                return results
+        return []
 
-class KasumiResponse(object):
+class KasumiSearchResponse(object):
     _code: int = 0
     _message: str = ""
     _data: List[KasumiSearchResult]
@@ -138,25 +149,27 @@ class KasumiResponse(object):
     def get_data(self) -> List[KasumiSearchResult]:
         return self._data
 
-class KasumiEmbeddingItem(object):
-    """
-    This class is used to represent an embedding item.
-    You can use it to store the embedding and the id of the item.
-    Remember that the id is the id of the item in the `Your` database.
-    """
-    embedding: List[float] = []
-    similarity: float = 0.0
-    id: str = ""
+class KasumiInfoResponse(object):
+    _code: int = 0
+    _message: str = ""
+    _data: Dict[str, Any]
 
-    def __init__(self, embedding: List[float], id: str):
-        self.embedding = embedding
-        self.id = id
+    def __init__(self, code: int, message: str, data: Dict[str, Any]):
+        self._code = code
+        self._message = message
+        self._data = data
 
-    def set_similarity(self, similarity: float) -> None:
-        self.similarity = similarity
+    def get_code(self) -> int:
+        return self._code
 
-    def get_similarity(self) -> float:
-        return self.similarity
+    def get_message(self) -> str:
+        return self._message
+
+    def get_data(self) -> Dict[str, Any]:
+        return self._data
+
+class KasumiSession(object):
+    _user_token: str = ""
 
 class Kasumi(object):
     """
@@ -169,33 +182,113 @@ class Kasumi(object):
     _config: KasumiConfigration = None
     _search_strategy: List[KasumiSearchStrategy] = []
     _spiders: List[KasumiSpider] = []
+    _sessions: Dict[int, KasumiSession] = {}
 
     def __init__(self, config: KasumiConfigration):
         self._config = config
 
     def embeding_text(self, text: str) -> List[float]:
-        pass
-
-    def search_embedding_similarity(self, embedding: List[float]) -> List[KasumiEmbeddingItem]:
-        pass
+        ident = threading.get_ident()
+        try:
+            if ident in self._sessions:
+                session = self._sessions[threading.get_ident()]
+                embedding = embedding_text(text, TokenType.ENCRYPTION, session._user_token)
+            else:
+                embedding = embedding_text(text, TokenType.PLAINTEXT, self._config.get_token())
+            return embedding
+        except Exception:
+            raise KasumiException("Failed to get embedding of text. for more information, please see the traceback.")
+        
+    def search_embedding_similarity(self, embedding: List[float], limit: int = 10) -> List[KasumiEmbeddingItem]:
+        ident = threading.get_ident()
+        try:
+            if ident in self._sessions:
+                session = self._sessions[threading.get_ident()]
+                similarities = search_similarity(self._config.get_app_id(), self._config.get_search_key(), embedding, TokenType.ENCRYPTION, session._user_token, limit=limit)
+            else:
+                similarities = search_similarity(self._config.get_app_id(), self._config.get_search_key(), embedding, TokenType.PLAINTEXT, self._config.get_token(), limit=limit)
+            return similarities
+        except Exception:
+            raise KasumiException("Failed to search embedding similarity. for more information, please see the traceback.")
 
     def get_embedding_by_id(self, id: str) -> KasumiEmbeddingItem:
-        pass
+        ident = threading.get_ident()
+        try:
+            if ident in self._sessions:
+                session = self._sessions[threading.get_ident()]
+                embedding = get_embedding_by_id(self._config.get_app_id(), self._config.get_search_key(), id, TokenType.ENCRYPTION, session._user_token)
+            else:
+                embedding = get_embedding_by_id(self._config.get_app_id(), self._config.get_search_key(), id, TokenType.PLAINTEXT, self._config.get_token())
+            return embedding
+        except Exception:
+            raise KasumiException("Failed to get embedding by id. for more information, please see the traceback.")
 
-    def insert_embedding(self, embedding: List[float]) -> bool:
-        pass
+    def insert_embedding(self, embedding: List[float], id: str) -> bool:
+        try:
+            return insert_embedding(self._config.get_app_id(), self._config.get_search_key(), embedding, id)
+        except Exception:
+            raise KasumiException("Failed to insert embedding. for more information, please see the traceback.")
 
     def add_search_strategy(self, strategy: KasumiSearchStrategy) -> None:
-        pass
+        self._search_strategy.append(strategy)
 
     def add_spider(self, spider: KasumiSpider) -> None:
-        pass
+        self._spiders.append(spider)
 
     def get_search_strategies(self) -> List[KasumiSearchStrategy]:
-        pass
+        return self._search_strategy
 
     def get_spiders(self) -> List[KasumiSpider]:
-        pass
+        return self._spiders
+
+    def _handle_request_info(self, request: Dict[str, Any]) -> KasumiInfoResponse:
+        if request.get('remote_search_key') != self._config.get_search_key():
+            return KasumiInfoResponse(
+                code=401, message="Unauthorized", data={}
+            )
+
+        return KasumiInfoResponse(
+            code=200, message="OK", data={
+                "search_strategies": [{
+                    'name': strategy.name,
+                    'description': strategy.description,
+                } for strategy in self._search_strategy],
+            }
+        )
+
+    def _handle_request_search(self, request: Dict[str, Any]) -> KasumiSearchResponse:
+        if request.get('remote_search_key') != self._config.get_search_key():
+            return KasumiSearchResponse(
+                code=401, message="Unauthorized", data=[]
+            )
+
+        ident = threading.get_ident()
+        self._sessions[ident] = KasumiSession()
+
+        strategy = request.get("strategy")
+        column = request.get("column")
+        value = request.get("value")
+
+        if strategy is None or column is None or value is None:
+            return KasumiSearchResponse(
+                code=400, message="Bad Request", data=[]
+            )
+        
+        if not isinstance(strategy, str) or not isinstance(column, str) or not isinstance(value, str):
+            return KasumiSearchResponse(
+                code=400, message="Bad Request", data=[]
+            )
+
+        for search_strategy in self._search_strategy:
+            if search_strategy.name == strategy:
+                results = search_strategy.search(self, column, value)
+
+        if ident in self._sessions:
+            del self._sessions[ident]
+
+        return KasumiSearchResponse(
+            code=200, message="OK", data=results
+        )
 
     def run_forever(self) -> None:
         pass
