@@ -1,1 +1,1 @@
-from cls import *
+from kasumi.cls import *
