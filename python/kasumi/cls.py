@@ -7,23 +7,18 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Iterator
 from .base_cls import TokenType
-from .embedding import KasumiEmbeddingItem, embedding_text, search_similarity, get_embedding_by_id, insert_embedding
+from .abstract import *
+from .embedding import KasumiEmbedding
 
 import threading
 
-class KasumiException(Exception):
-    """
-    This class is used to represent an exception raised by the Kasumi SDK.
-    """
-    pass
-
-class KasumiConfigration(object):
+class KasumiConfigration(AbstractKasumiConfigration):
     _token: str = ""
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
 
-    def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
+    def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
         self._token = token
         self._search_key = search_key
@@ -41,7 +36,7 @@ class KasumiConfigration(object):
     def get_kasumi_url(self) -> str:
         return self._kasumi_url
 
-class KasumiSearchResultField(object):
+class KasumiSearchResultField(AbstractKasumiSearchResultField):
     """
     KasumiSearchResultField is used to represent a field in the search result.
     _key: The key of the field.
@@ -67,7 +62,7 @@ class KasumiSearchResultField(object):
             "llm_disabled": self._llm_disabled
         }
 
-class KasumiSearchResult(object):
+class KasumiSearchResult(AbstractKasumiSearchResult):
     _fields: List[KasumiSearchResultField] = []
 
     def __init__(self, fields: List[KasumiSearchResultField]):
@@ -91,37 +86,10 @@ class KasumiSearchResult(object):
 
         return KasumiSearchResult(fields)
 
-class KasumiSpider(ABC):
-    @abstractmethod
-    @property
-    def name(self) -> str:
-        pass
+class KasumiSpider(AbstractKasumiSpider):
+    pass
 
-    @abstractmethod
-    @property
-    def priority(self) -> int:
-        pass
-
-    @abstractmethod
-    def search(self, column: str, value: str) -> Iterator[KasumiSearchResult]:
-        pass
-
-class KasumiSearchStrategy(ABC):
-    @abstractmethod
-    @property
-    def name(self) -> str:
-        pass
-
-    @abstractmethod
-    @property
-    def description(self) -> str:
-        pass
-
-    @abstractmethod
-    @property
-    def possible_columns(self) -> List[str]:
-        pass
-
+class KasumiSearchStrategy(AbstractKasumiSearchStrategy):
     def search(self, app: 'Kasumi', column: str, value: str) -> Iterator[KasumiSearchResult]:
         spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
         for spider in spiders:
@@ -130,7 +98,7 @@ class KasumiSearchStrategy(ABC):
                 return results
         return []
 
-class KasumiSearchResponse(object):
+class KasumiSearchResponse(AbstractKasumiSearchResponse):
     _code: int = 0
     _message: str = ""
     _data: List[KasumiSearchResult]
@@ -149,7 +117,7 @@ class KasumiSearchResponse(object):
     def get_data(self) -> List[KasumiSearchResult]:
         return self._data
 
-class KasumiInfoResponse(object):
+class KasumiInfoResponse(AbstractKasumiInfoResponse):
     _code: int = 0
     _message: str = ""
     _data: Dict[str, Any]
@@ -168,10 +136,10 @@ class KasumiInfoResponse(object):
     def get_data(self) -> Dict[str, Any]:
         return self._data
 
-class KasumiSession(object):
+class KasumiSession(AbstractKasumiSession):
     _user_token: str = ""
 
-class Kasumi(object):
+class Kasumi(AbstractKasumi):
     """
     This class is used to interact with the Kasumi API.
 
@@ -183,6 +151,7 @@ class Kasumi(object):
     _search_strategy: List[KasumiSearchStrategy] = []
     _spiders: List[KasumiSpider] = []
     _sessions: Dict[int, KasumiSession] = {}
+    _embedding: AbstractKasumiEmbedding = KasumiEmbedding()
 
     def __init__(self, config: KasumiConfigration):
         self._config = config
@@ -192,42 +161,42 @@ class Kasumi(object):
         try:
             if ident in self._sessions:
                 session = self._sessions[threading.get_ident()]
-                embedding = embedding_text(text, TokenType.ENCRYPTION, session._user_token)
+                embedding = self._embedding.embedding_text(self, text, TokenType.ENCRYPTION, session._user_token)
             else:
-                embedding = embedding_text(text, TokenType.PLAINTEXT, self._config.get_token())
+                embedding = self._embedding.embedding_text(self, text, TokenType.PLAINTEXT, self._config.get_token())
             return embedding
-        except Exception:
-            raise KasumiException("Failed to get embedding of text. for more information, please see the traceback.")
+        except Exception as e:
+            raise KasumiException("Failed to get embedding of text. for more information, please see the traceback. %s" % e)
         
-    def search_embedding_similarity(self, embedding: List[float], limit: int = 10) -> List[KasumiEmbeddingItem]:
+    def search_embedding_similarity(self, embedding: List[float], limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
         ident = threading.get_ident()
         try:
             if ident in self._sessions:
                 session = self._sessions[threading.get_ident()]
-                similarities = search_similarity(self._config.get_app_id(), self._config.get_search_key(), embedding, TokenType.ENCRYPTION, session._user_token, limit=limit)
+                similarities = self._embedding.search_similarity(self, embedding, TokenType.ENCRYPTION, session._user_token, limit=limit)
             else:
-                similarities = search_similarity(self._config.get_app_id(), self._config.get_search_key(), embedding, TokenType.PLAINTEXT, self._config.get_token(), limit=limit)
+                similarities = self._embedding.search_similarity(self, embedding, TokenType.PLAINTEXT, self._config.get_token(), limit=limit)
             return similarities
-        except Exception:
-            raise KasumiException("Failed to search embedding similarity. for more information, please see the traceback.")
+        except Exception as e:
+            raise KasumiException("Failed to search embedding similarity. for more information, please see the traceback. %s" % e)
 
-    def get_embedding_by_id(self, id: str) -> KasumiEmbeddingItem:
+    def get_embedding_by_id(self, id: str) -> AbstractKasumiEmbeddingItem:
         ident = threading.get_ident()
         try:
             if ident in self._sessions:
                 session = self._sessions[threading.get_ident()]
-                embedding = get_embedding_by_id(self._config.get_app_id(), self._config.get_search_key(), id, TokenType.ENCRYPTION, session._user_token)
+                embedding = self._embedding.get_embedding_by_id(self, id, TokenType.ENCRYPTION, session._user_token)
             else:
-                embedding = get_embedding_by_id(self._config.get_app_id(), self._config.get_search_key(), id, TokenType.PLAINTEXT, self._config.get_token())
+                embedding = self._embedding.get_embedding_by_id(self, id, TokenType.PLAINTEXT, self._config.get_token())
             return embedding
-        except Exception:
-            raise KasumiException("Failed to get embedding by id. for more information, please see the traceback.")
+        except Exception as e:
+            raise KasumiException("Failed to get embedding by id. for more information, please see the traceback. %s" % e)
 
     def insert_embedding(self, embedding: List[float], id: str) -> bool:
         try:
-            return insert_embedding(self._config.get_app_id(), self._config.get_search_key(), embedding, id)
-        except Exception:
-            raise KasumiException("Failed to insert embedding. for more information, please see the traceback.")
+            return self._embedding.insert_embedding(self, embedding, id)
+        except Exception as e:
+            raise KasumiException("Failed to insert embedding. for more information, please see the traceback. %s" % e)
 
     def add_search_strategy(self, strategy: KasumiSearchStrategy) -> None:
         self._search_strategy.append(strategy)
