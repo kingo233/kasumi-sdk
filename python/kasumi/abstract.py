@@ -6,7 +6,15 @@ from __future__ import annotations
 '''
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Iterator
-from .base_cls import TokenType
+
+from enum import Enum
+
+class TokenType(Enum):
+    """
+    This class is used to represent the type of a token.
+    """
+    PLAINTEXT = "plaintext"
+    ENCRYPTION = "encryption"
 
 class KasumiException(Exception):
     """
@@ -41,6 +49,7 @@ class AbstractKasumiConfigration(ABC):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
+    _search_strategy: AbstractKasumiSearchStrategy
 
     @abstractmethod
     def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
@@ -60,6 +69,10 @@ class AbstractKasumiConfigration(ABC):
     
     @abstractmethod
     def get_kasumi_url(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
         pass
 
 class AbstractKasumiSearchResultField(ABC):
@@ -113,7 +126,7 @@ class AbstractKasumiSpider(ABC):
         pass
 
     @abstractmethod
-    def search(self, column: str, value: str) -> Iterator[AbstractKasumiSearchResult]:
+    def search(self, search_param: Dict) -> List[AbstractKasumiSearchResult]:
         pass
 
 class AbstractKasumiSearchStrategy(ABC):
@@ -127,13 +140,8 @@ class AbstractKasumiSearchStrategy(ABC):
     def description(self) -> str:
         pass
 
-    @property
     @abstractmethod
-    def possible_columns(self) -> List[str]:
-        pass
-
-    @abstractmethod
-    def search(self, app: AbstractKasumi, column: str, value: str) -> Iterator[AbstractKasumiSearchResult]:
+    def search(self, app: AbstractKasumi, search_param: Dict) -> List[AbstractKasumiSearchResult]:
         pass
 
 class AbstractKasumiSearchResponse(ABC):
@@ -190,40 +198,16 @@ class AbstractKasumi(ABC):
     :raises all methods in Kasumi may raise KasumiException if the Kasumi API returns an error.
     """
     _config: AbstractKasumiConfigration = None
-    _search_strategy: List[AbstractKasumiSearchStrategy] = []
     _spiders: List[AbstractKasumiSpider] = []
     _sessions: Dict[int, AbstractKasumiSession] = {}
+    _embedding: AbstractKasumiEmbedding
 
     @abstractmethod
     def __init__(self, config: AbstractKasumiConfigration):
         pass
 
     @abstractmethod
-    def embeding_text(self, text: str) -> List[float]:
-        pass
-        
-    @abstractmethod
-    def search_embedding_similarity(self, embedding: List[float], limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
-        pass
-
-    @abstractmethod
-    def get_embedding_by_id(self, id: str) -> AbstractKasumiEmbeddingItem:
-        pass
-
-    @abstractmethod
-    def insert_embedding(self, embedding: List[float], id: str) -> bool:
-        pass
-
-    @abstractmethod
-    def add_search_strategy(self, strategy: AbstractKasumiSearchStrategy) -> None:
-        pass
-
-    @abstractmethod
     def add_spider(self, spider: AbstractKasumiSpider) -> None:
-        pass
-
-    @abstractmethod
-    def get_search_strategies(self) -> List[AbstractKasumiSearchStrategy]:
         pass
 
     @abstractmethod
@@ -242,63 +226,6 @@ class AbstractKasumi(ABC):
     def run_forever(self) -> None:
         pass
 
-class AbstractKasumiEmbedding(ABC):
-    @abstractmethod
-    def insert_embedding(app: AbstractKasumi, embedding: List[float], id: str) -> bool:
-        """
-        This function is used to insert an embedding into the Kasumi database.
-
-        will not cost any KaToken but has a limit of 1000 times per day.
-
-        :param app_id: The id of the app.
-        :param remote_search_key: The remote search key of the app, can be set in miduoduo developer platform.
-        :param embedding: The embedding to insert.
-        :return: True if the embedding was inserted successfully, False otherwise.
-        """
-        pass
-
-    @abstractmethod
-    def embedding_text(app: AbstractKasumi, text: str, token_type: TokenType, token: str):
-        """
-        This function is used to get the embedding of a text.
-
-        cause it's necessary to cost tokens to embedding text in Kasumi, so you should pass the token_type and token to this function.
-        token_type declare the type of the token, to security reason, if the caller is user not developer, Kasumi will send an encrypted token to the caller, finally pass it here.
-        but if developer call this function, you can pass TokenType.PLAINTEXT and token to this function.
-
-        :param text: The text to get the embedding of.
-        :param token_type: The type of the token. Can be TokenType.PLAINTEXT or TokenType.ENCRYPTION.
-        :return: The embedding of the text.
-        """
-
-    @abstractmethod
-    def search_similarity(app: AbstractKasumi, embedding: List[float], token_type: TokenType, token: str, limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
-        """
-        This function is used to search for embeddings that are similar to a given embedding.
-
-        search similarity will cause at least 1 KaToken, so you should pass the token_type and token to this function.
-
-        :param app_id: The id of the app.
-        :param remote_search_key: The remote search key of the app, can be set in miduoduo developer platform.
-        :param embedding: The embedding to search for.
-        :param limit: The maximum number of embeddings to return.
-        :return: A list of EmbeddingSimilarity objects.
-        """
-        pass
-
-    @abstractmethod
-    def get_embedding_by_id(app: AbstractKasumi, id: str, token_type: TokenType, token: str) -> AbstractKasumiEmbeddingItem:
-        """
-        This function is used to get the embedding of an item by its id.
-
-        get embedding by id will cause at least 1 KaToken, so you should pass the token_type and token to this function.
-
-        :param app_id: The id of the app.
-        :param remote_search_key: The remote search key of the app, can be set in miduoduo developer platform.
-        :param id: The id of the item.
-        :return: The embedding of the item.
-        """
-        pass
 
 class AbstractKasumiEmbedding(ABC):
     @abstractmethod
@@ -328,7 +255,7 @@ class AbstractKasumiEmbedding(ABC):
         :param token_type: The type of the token. Can be TokenType.PLAINTEXT or TokenType.ENCRYPTION.
         :return: The embedding of the text.
         """
-
+    
     @abstractmethod
     def search_similarity(app: AbstractKasumi, embedding: List[float], token_type: TokenType, token: str, limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
         """
@@ -343,6 +270,7 @@ class AbstractKasumiEmbedding(ABC):
         :return: A list of EmbeddingSimilarity objects.
         """
         pass
+
 
     @abstractmethod
     def get_embedding_by_id(app: AbstractKasumi, id: str, token_type: TokenType, token: str) -> AbstractKasumiEmbeddingItem:

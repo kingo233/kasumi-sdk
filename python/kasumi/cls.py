@@ -4,9 +4,7 @@ from __future__ import annotations
     This file contains the class for the Kasumi SDK.
     It is used to interact with the Kasumi API.
 '''
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Iterator
-from .base_cls import TokenType
+from typing import List, Dict, Any, Iterator, Tuple
 from .abstract import *
 from .embedding import KasumiEmbedding
 
@@ -17,11 +15,14 @@ class KasumiConfigration(AbstractKasumiConfigration):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
+    _search_strategy: AbstractKasumiSearchStrategy  
 
-    def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
+    def __init__(self, app_id: int, token: str, search_key: str, search_strategy: AbstractKasumiSearchStrategy,
+                  kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
         self._token = token
         self._search_key = search_key
+        self._search_strategy = search_strategy
         self._kasumi_url = kasumi_url
 
     def get_app_id(self) -> int:
@@ -35,6 +36,9 @@ class KasumiConfigration(AbstractKasumiConfigration):
     
     def get_kasumi_url(self) -> str:
         return self._kasumi_url
+    
+    def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
+        return self._search_strategy
 
 class KasumiSearchResultField(AbstractKasumiSearchResultField):
     """
@@ -86,17 +90,45 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
 
         return KasumiSearchResult(fields)
 
-class KasumiSpider(AbstractKasumiSpider):
-    pass
+class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
+    '''
+    This class is used to implement the default search strategy.
+    '''
 
-class KasumiSearchStrategy(AbstractKasumiSearchStrategy):
-    def search(self, app: 'Kasumi', column: str, value: str) -> Iterator[KasumiSearchResult]:
+    def on_single_result(self, result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
+        '''
+            on single result,return processed single_result and complete search
+            for simple scenario, can just judge if result empty
+            for complex scenario, can judge if result is what we want using LLM or other method
+        '''
+        if len(result) == 0:
+            return False,result
+        else:
+            return True,result
+        
+    def on_all_result(self, result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
+        '''
+            on all result, maybe we can do some post process here
+            for simple scenario, can just return first non-empty result
+            for complex scenario, can do some post process here,eg: using LLM to summarize or other things
+        '''
+        temp_result = None
+        for i in result:
+            if len(i) != 0:
+                temp_result = i
+                break
+        return temp_result
+
+    def search(self, app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
         spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
+        all_results = []
         for spider in spiders:
-            results = spider.search(column, value)
-            if len(results) > 0:
-                return results
-        return []
+            single_result = spider.search(search_param)
+            complete,single_result = self.on_single_result(single_result)
+            all_results.extend(single_result)
+            if complete:
+                break
+        return self.on_all_result(all_results)
 
 class KasumiSearchResponse(AbstractKasumiSearchResponse):
     _code: int = 0
@@ -148,8 +180,7 @@ class Kasumi(AbstractKasumi):
     :raises all methods in Kasumi may raise KasumiException if the Kasumi API returns an error.
     """
     _config: KasumiConfigration = None
-    _search_strategy: List[KasumiSearchStrategy] = []
-    _spiders: List[KasumiSpider] = []
+    _spiders: List[AbstractKasumiSpider] = []
     _sessions: Dict[int, KasumiSession] = {}
     _embedding: AbstractKasumiEmbedding = KasumiEmbedding()
 
@@ -198,16 +229,10 @@ class Kasumi(AbstractKasumi):
         except Exception as e:
             raise KasumiException("Failed to insert embedding. for more information, please see the traceback. %s" % e)
 
-    def add_search_strategy(self, strategy: KasumiSearchStrategy) -> None:
-        self._search_strategy.append(strategy)
-
-    def add_spider(self, spider: KasumiSpider) -> None:
+    def add_spider(self, spider: AbstractKasumiSpider) -> None:
         self._spiders.append(spider)
 
-    def get_search_strategies(self) -> List[KasumiSearchStrategy]:
-        return self._search_strategy
-
-    def get_spiders(self) -> List[KasumiSpider]:
+    def get_spiders(self) -> List[AbstractKasumiSpider]:
         return self._spiders
 
     def _handle_request_info(self, request: Dict[str, Any]) -> KasumiInfoResponse:
@@ -218,10 +243,7 @@ class Kasumi(AbstractKasumi):
 
         return KasumiInfoResponse(
             code=200, message="OK", data={
-                "search_strategies": [{
-                    'name': strategy.name,
-                    'description': strategy.description,
-                } for strategy in self._search_strategy],
+                []
             }
         )
 
@@ -234,23 +256,8 @@ class Kasumi(AbstractKasumi):
         ident = threading.get_ident()
         self._sessions[ident] = KasumiSession()
 
-        strategy = request.get("strategy")
-        column = request.get("column")
-        value = request.get("value")
-
-        if strategy is None or column is None or value is None:
-            return KasumiSearchResponse(
-                code=400, message="Bad Request", data=[]
-            )
-        
-        if not isinstance(strategy, str) or not isinstance(column, str) or not isinstance(value, str):
-            return KasumiSearchResponse(
-                code=400, message="Bad Request", data=[]
-            )
-
-        for search_strategy in self._search_strategy:
-            if search_strategy.name == strategy:
-                results = search_strategy.search(self, column, value)
+        search_param = request.get('search_param')
+        results = self._config.get_search_strategy().search(search_param)
 
         if ident in self._sessions:
             del self._sessions[ident]
