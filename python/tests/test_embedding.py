@@ -1,4 +1,4 @@
-from kasumi import KasumiEmbedding, Kasumi, KasumiConfigration
+from kasumi import KasumiEmbedding, Kasumi, KasumiConfigration, DefaultSearchStrategy
 import sys
 
 def test_embedding():
@@ -8,7 +8,8 @@ def test_embedding():
         KasumiConfigration(
             app_id=0,
             token=token,
-            search_key=""
+            search_key="",
+            search_strategy=DefaultSearchStrategy
         )
     )
 

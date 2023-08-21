@@ -6,8 +6,6 @@ from typing import List, Union
 from requests import post, get
 
 from kasumi.abstract import AbstractKasumi, AbstractKasumiEmbeddingItem
-from kasumi.base_cls import TokenType
-from .base_cls import TokenType
 from .abstract import *
 
 class KasumiEmbeddingItem(AbstractKasumiEmbeddingItem):
