@@ -15,15 +15,18 @@ class KasumiConfigration(AbstractKasumiConfigration):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
+    _search_desc : str = ""
     _search_strategy: AbstractKasumiSearchStrategy  
 
-    def __init__(self, app_id: int, token: str, search_key: str, search_strategy: AbstractKasumiSearchStrategy,
+    def __init__(self, app_id: int, token: str, search_key: str, search_desc: str, 
+                  search_strategy: AbstractKasumiSearchStrategy,
                   kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
         self._token = token
         self._search_key = search_key
         self._search_strategy = search_strategy
         self._kasumi_url = kasumi_url
+        self._search_desc = search_desc
 
     def get_app_id(self) -> int:
         return self._app_id
@@ -39,6 +42,9 @@ class KasumiConfigration(AbstractKasumiConfigration):
     
     def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
         return self._search_strategy
+    
+    def get_search_desc(self) -> str:
+        return self._search_desc
 
 class KasumiSearchResultField(AbstractKasumiSearchResultField):
     """
@@ -70,7 +76,7 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
     _fields: List[KasumiSearchResultField] = []
 
     def __init__(self, fields: List[KasumiSearchResultField]):
-        self.fields = fields
+        self._fields = fields
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -95,7 +101,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
     This class is used to implement the default search strategy.
     '''
 
-    def on_single_result(self, result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
+    def on_single_result(result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
         '''
             on single result,return processed single_result and complete search
             for simple scenario, can just judge if result empty
@@ -106,7 +112,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
         else:
             return True,result
         
-    def on_all_result(self, result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
+    def on_all_result(result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
         '''
             on all result, maybe we can do some post process here
             for simple scenario, can just return first non-empty result
@@ -119,16 +125,16 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
                 break
         return temp_result
 
-    def search(self, app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
+    def search(app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
         spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
         all_results = []
         for spider in spiders:
             single_result = spider.search(search_param)
-            complete,single_result = self.on_single_result(single_result)
+            complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
             all_results.extend(single_result)
             if complete:
                 break
-        return self.on_all_result(all_results)
+        return DefaultSearchStrategy.on_all_result(all_results)
 
 class KasumiSearchResponse(AbstractKasumiSearchResponse):
     _code: int = 0
@@ -148,6 +154,9 @@ class KasumiSearchResponse(AbstractKasumiSearchResponse):
 
     def get_data(self) -> List[KasumiSearchResult]:
         return self._data
+    
+    def __str__(self) -> str:
+        return f"KasumiSearchResponse(code={self._code},message={self._message},data={self._data})"
 
 class KasumiInfoResponse(AbstractKasumiInfoResponse):
     _code: int = 0
@@ -243,7 +252,7 @@ class Kasumi(AbstractKasumi):
 
         return KasumiInfoResponse(
             code=200, message="OK", data={
-                []
+                "search_desc": self._config.get_search_desc(),
             }
         )
 
@@ -257,7 +266,7 @@ class Kasumi(AbstractKasumi):
         self._sessions[ident] = KasumiSession()
 
         search_param = request.get('search_param')
-        results = self._config.get_search_strategy().search(search_param)
+        results = self._config.get_search_strategy().search(self,search_param)
 
         if ident in self._sessions:
             del self._sessions[ident]
