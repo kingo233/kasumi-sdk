@@ -49,10 +49,13 @@ class AbstractKasumiConfigration(ABC):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
+    _search_desc : str = ""
     _search_strategy: AbstractKasumiSearchStrategy
 
     @abstractmethod
-    def __init__(self, app_id: int, token: str, search_key: str, kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
+    def __init__(self, app_id: int, token: str, search_key: str, 
+                 search_desc: str, search_strategy: AbstractKasumiSearchStrategy,
+                 kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
         pass
 
     @abstractmethod
@@ -73,6 +76,10 @@ class AbstractKasumiConfigration(ABC):
 
     @abstractmethod
     def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
+        pass
+
+    @abstractmethod
+    def get_search_desc(self) -> str:
         pass
 
 class AbstractKasumiSearchResultField(ABC):
@@ -114,6 +121,12 @@ class AbstractKasumiSearchResult(ABC):
     def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> AbstractKasumiSearchResult:
         pass
 
+    def __len__(self) -> int:
+        return len(self._fields)
+    
+    def __str__(self) -> str:
+        return str(self.to_dict())
+
 class AbstractKasumiSpider(ABC):
     @property
     @abstractmethod
@@ -141,7 +154,7 @@ class AbstractKasumiSearchStrategy(ABC):
         pass
 
     @abstractmethod
-    def search(self, app: AbstractKasumi, search_param: Dict) -> List[AbstractKasumiSearchResult]:
+    def search(app: AbstractKasumi, search_param: Dict) -> List[AbstractKasumiSearchResult]:
         pass
 
 class AbstractKasumiSearchResponse(ABC):
