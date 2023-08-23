@@ -30,12 +30,10 @@ class PopipaSpider(AbstractKasumiSpider):
                     "想法很直率，但是是一个十分冷静，很清楚知道为了别人该怎么做的孩子。家人是父亲母亲和20只兔子。",
         }
         text = mini_database.get(name,'not found')
-        field = KasumiSearchResultField(
-            key='result',
-            content=text,
-        )
-        single_result = KasumiSearchResult([field])
-        return [single_result]
+        result = KasumiSearchResult.load_from_dict({
+            'result':text,
+        })
+        return result
 
 popipa_search_desc = "search popipa members information by name,accept one of [Arisa,Rimi,Saya,Kasumi,Tae] as parameter."\
                      "example:{'name':'Arisa'}"
