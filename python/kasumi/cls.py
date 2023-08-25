@@ -1,4 +1,6 @@
 from __future__ import annotations
+import flask
+import json
 
 '''
     This file contains the class for the Kasumi SDK.
@@ -89,7 +91,8 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
         disabled_show_columns = disabled_show_columns or []
 
         fields = []
-        for key, value in data:
+        for key in data:
+            value = data[key]
             fields.append(KasumiSearchResultField(
                 key=key, content=value, llm_disabled=key in disabled_llm_columns, show_disabled=key in disabled_show_columns
             ))
@@ -131,7 +134,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
         for spider in spiders:
             single_result = spider.search(search_param)
             complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
-            all_results.extend(single_result)
+            all_results.append(single_result)
             if complete:
                 break
         return DefaultSearchStrategy.on_all_result(all_results)
@@ -157,6 +160,13 @@ class KasumiSearchResponse(AbstractKasumiSearchResponse):
     
     def __str__(self) -> str:
         return f"KasumiSearchResponse(code={self._code},message={self._message},data={self._data})"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "code": self._code,
+            "message": self._message,
+            "data": [result.to_dict() for result in self._data]
+        }
 
 class KasumiInfoResponse(AbstractKasumiInfoResponse):
     _code: int = 0
@@ -251,9 +261,7 @@ class Kasumi(AbstractKasumi):
             )
 
         return KasumiInfoResponse(
-            code=200, message="OK", data={
-                "search_desc": self._config.get_search_desc(),
-            }
+            code=200, message="OK", data= self._config.get_search_desc(),
         )
 
     def _handle_request_search(self, request: Dict[str, Any]) -> KasumiSearchResponse:
@@ -265,7 +273,7 @@ class Kasumi(AbstractKasumi):
         ident = threading.get_ident()
         self._sessions[ident] = KasumiSession()
 
-        search_param = request.get('search_param')
+        search_param = json.loads(request.get('search_param','{}'))
         results = self._config.get_search_strategy().search(self,search_param)
 
         if ident in self._sessions:
@@ -275,5 +283,23 @@ class Kasumi(AbstractKasumi):
             code=200, message="OK", data=results
         )
 
-    def run_forever(self) -> None:
-        pass
+    def run_forever(self, http_port: int = 3433) -> None:
+        self.app = flask.Flask(__name__)
+
+        @self.app.route('/info', methods=['POST'])
+        def info():
+            request = flask.request.get_json()
+            info_response = self._handle_request_info(request)
+            return info_response.to_flask_response()
+        
+        @self.app.route('/search', methods=['POST'])
+        def search():
+            request = flask.request.get_json()
+            search_response = self._handle_request_search(request)
+            return search_response.to_flask_response()
+
+        # launch http server
+        global server
+        from eventlet import wsgi, listen
+        server = listen(('0.0.0.0', http_port))
+        wsgi.server(server, self.app)

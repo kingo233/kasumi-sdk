@@ -16,7 +16,7 @@ class PopipaSpider(AbstractKasumiSpider):
             return []
         mini_database = {
             "Arisa": "Poppin'Party乐队的键盘手，就读花咲川女子学园。喜欢的食物有豆沙水果凉粉、玄米、白煮蛋，讨厌葱类的食物。以盆景和上网为兴趣的室内派"\
-                        "虽然基本一直不出门，但很有方法所以在学校成绩优秀。非常毒舌，特别是总对香澄很强硬，但其实只是坦率不起来而已。在年幼时就学习过钢琴、不过半途而废了"\
+                        "虽然基本一直不出门，但很有方法所以在学校成绩优秀。非常毒舌，特别是总对Kasumi很强硬，但其实只是坦率不起来而已。在年幼时就学习过钢琴、不过半途而废了"\
                         "因为缺乏锻炼所以体力很差，拥有各式各样的坐姿以及狂放的睡姿",
             "Rimi": "Poppin'Party乐队的贝斯手，就读于花咲川女子学园。兴趣是游戏和读书，还有摄影的专长，平常会纪录乐团的日常。"\
                                 "关西人，性格比较胆小怯懦，一紧张就容易说出方言，比较认生所以起初一直自己一人在屋顶吃午餐。"\
@@ -33,7 +33,7 @@ class PopipaSpider(AbstractKasumiSpider):
         result = KasumiSearchResult.load_from_dict({
             'result':text,
         })
-        return result
+        return [result]
 
 popipa_search_desc = "search popipa members information by name,accept one of [Arisa,Rimi,Saya,Kasumi,Tae] as parameter."\
                      "example:{'name':'Arisa'}"

@@ -1,4 +1,6 @@
 from __future__ import annotations
+import flask
+import json
 
 '''
     This file contains the class for the Kasumi SDK.
@@ -178,6 +180,13 @@ class AbstractKasumiSearchResponse(ABC):
     def get_data(self) -> List[AbstractKasumiSearchResult]:
         pass
 
+    def to_flask_response(self) -> flask.Response:
+        return flask.Response(
+            response=json.dumps([result.to_dict() for result in self._data]),
+            status=self.get_code(),
+            mimetype="application/json"
+        )
+
 class AbstractKasumiInfoResponse(ABC):
     _code: int = 0
     _message: str = ""
@@ -198,6 +207,13 @@ class AbstractKasumiInfoResponse(ABC):
     @abstractmethod
     def get_data(self) -> Dict[str, Any]:
         pass
+
+    def to_flask_response(self) -> flask.Response:
+        return flask.Response(
+            response=self._data,
+            status=self.get_code(),
+            mimetype="application/json"
+        )
 
 class AbstractKasumiSession(object):
     _user_token: str = ""
