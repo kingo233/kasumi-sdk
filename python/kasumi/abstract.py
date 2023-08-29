@@ -286,7 +286,7 @@ class AbstractKasumiEmbedding(ABC):
         """
     
     @abstractmethod
-    def search_similarity(app: AbstractKasumi, embedding: List[float], token_type: TokenType, token: str, limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
+    def search_similarity(app: AbstractKasumi, embedding: List[float], top_k: int = 3) -> List[AbstractKasumiEmbeddingItem]:
         """
         This function is used to search for embeddings that are similar to a given embedding.
 
@@ -302,7 +302,7 @@ class AbstractKasumiEmbedding(ABC):
 
 
     @abstractmethod
-    def get_embedding_by_id(app: AbstractKasumi, id: str, token_type: TokenType, token: str) -> AbstractKasumiEmbeddingItem:
+    def get_embedding_by_id(app: AbstractKasumi, id: str) -> AbstractKasumiEmbeddingItem:
         """
         This function is used to get the embedding of an item by its id.
 

@@ -12,6 +12,46 @@ from .embedding import KasumiEmbedding
 
 import threading
 
+class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
+    '''
+    This class is used to implement the default search strategy.
+    '''
+
+    def on_single_result(result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
+        '''
+            on single result,return processed single_result and complete search
+            for simple scenario, can just judge if result empty
+            for complex scenario, can judge if result is what we want using LLM or other method
+        '''
+        if len(result) == 0:
+            return False,result
+        else:
+            return True,result
+        
+    def on_all_result(result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
+        '''
+            on all result, maybe we can do some post process here
+            for simple scenario, can just return first non-empty result
+            for complex scenario, can do some post process here,eg: using LLM to summarize or other things
+        '''
+        temp_result = None
+        for i in result:
+            if len(i) != 0:
+                temp_result = i
+                break
+        return temp_result
+
+    def search(app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
+        spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
+        all_results = []
+        for spider in spiders:
+            single_result = spider.search(search_param)
+            complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
+            all_results.append(single_result)
+            if complete:
+                break
+        return DefaultSearchStrategy.on_all_result(all_results)
+
 class KasumiConfigration(AbstractKasumiConfigration):
     _token: str = ""
     _search_key: str = ""
@@ -21,7 +61,7 @@ class KasumiConfigration(AbstractKasumiConfigration):
     _search_strategy: AbstractKasumiSearchStrategy  
 
     def __init__(self, app_id: int, token: str, search_key: str, search_desc: str, 
-                  search_strategy: AbstractKasumiSearchStrategy,
+                  search_strategy: AbstractKasumiSearchStrategy = DefaultSearchStrategy,
                   kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
         self._token = token
@@ -98,46 +138,6 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
             ))
 
         return KasumiSearchResult(fields)
-
-class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
-    '''
-    This class is used to implement the default search strategy.
-    '''
-
-    def on_single_result(result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
-        '''
-            on single result,return processed single_result and complete search
-            for simple scenario, can just judge if result empty
-            for complex scenario, can judge if result is what we want using LLM or other method
-        '''
-        if len(result) == 0:
-            return False,result
-        else:
-            return True,result
-        
-    def on_all_result(result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
-        '''
-            on all result, maybe we can do some post process here
-            for simple scenario, can just return first non-empty result
-            for complex scenario, can do some post process here,eg: using LLM to summarize or other things
-        '''
-        temp_result = None
-        for i in result:
-            if len(i) != 0:
-                temp_result = i
-                break
-        return temp_result
-
-    def search(app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
-        spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
-        all_results = []
-        for spider in spiders:
-            single_result = spider.search(search_param)
-            complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
-            all_results.append(single_result)
-            if complete:
-                break
-        return DefaultSearchStrategy.on_all_result(all_results)
 
 class KasumiSearchResponse(AbstractKasumiSearchResponse):
     _code: int = 0
@@ -218,26 +218,16 @@ class Kasumi(AbstractKasumi):
         except Exception as e:
             raise KasumiException("Failed to get embedding of text. for more information, please see the traceback. %s" % e)
         
-    def search_embedding_similarity(self, embedding: List[float], limit: int = 10) -> List[AbstractKasumiEmbeddingItem]:
-        ident = threading.get_ident()
+    def search_embedding_similarity(self, embedding: List[float], top_k: int = 3) -> List[AbstractKasumiEmbeddingItem]:
         try:
-            if ident in self._sessions:
-                session = self._sessions[threading.get_ident()]
-                similarities = self._embedding.search_similarity(self, embedding, TokenType.ENCRYPTION, session._user_token, limit=limit)
-            else:
-                similarities = self._embedding.search_similarity(self, embedding, TokenType.PLAINTEXT, self._config.get_token(), limit=limit)
+            similarities = self._embedding.search_similarity(self, embedding, top_k=top_k)
             return similarities
         except Exception as e:
             raise KasumiException("Failed to search embedding similarity. for more information, please see the traceback. %s" % e)
 
     def get_embedding_by_id(self, id: str) -> AbstractKasumiEmbeddingItem:
-        ident = threading.get_ident()
         try:
-            if ident in self._sessions:
-                session = self._sessions[threading.get_ident()]
-                embedding = self._embedding.get_embedding_by_id(self, id, TokenType.ENCRYPTION, session._user_token)
-            else:
-                embedding = self._embedding.get_embedding_by_id(self, id, TokenType.PLAINTEXT, self._config.get_token())
+            embedding = self._embedding.get_embedding_by_id(self, id)
             return embedding
         except Exception as e:
             raise KasumiException("Failed to get embedding by id. for more information, please see the traceback. %s" % e)

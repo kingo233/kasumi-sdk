@@ -39,11 +39,58 @@ class KasumiEmbedding(AbstractKasumiEmbedding):
         
         return response.json()['data']['embedding']
 
-    def get_embedding_by_id(self, app: AbstractKasumi, id: str, token_type: TokenType, token: str) -> KasumiEmbeddingItem:
-        pass
+    def get_embedding_by_id(self, app: AbstractKasumi, id: str) -> KasumiEmbeddingItem:
+        url = app._config.get_kasumi_url()
+        response = post(f"{url}/v1/vec/get/via_id", data={
+            'app_id': app._config.get_app_id(),
+            'key': app._config.get_search_key(),
+            'id': id
+        })
+        if response.status_code != 200:
+            raise KasumiException(f"Failed to get embedding due to {response.text}")
+        response = response.json()
+        if response['code'] != 0:
+            raise KasumiException(f"Failed to get embedding due to {response['msg']}")
+        data = response['data']
+        items = []
+        for item in data:
+            embedding_item = KasumiEmbeddingItem([], item['_id'])
+            items.append(embedding_item)
+        return items[0]
 
     def insert_embedding(self, app: AbstractKasumi, embedding: List[float], id: str) -> bool:
-        pass
+        url = app._config.get_kasumi_url()
+        response = post(f"{url}/v1/vec/insert", data={
+            'app_id': app._config.get_app_id(),
+            'key': app._config.get_search_key(),
+            'id': id,
+            'embedding': ','.join([str(x) for x in embedding])
+        })
+        if response.status_code != 200:
+            raise KasumiException(f"Failed to insert embedding due to {response.text}")
+        response = response.json()
+        if response['code'] != 0:
+            raise KasumiException(f"Failed to insert embedding due to {response['msg']}")
+        return response['data'] == 'OK'
 
-    def search_similarity(self, app: AbstractKasumi, embedding: List[float], token_type: TokenType, token: str, limit: int = 10) -> List[KasumiEmbeddingItem]:
-        pass
+    def search_similarity(self, app: AbstractKasumi, embedding: List[float], top_k: int = 3) -> List[KasumiEmbeddingItem]:
+        url = app._config.get_kasumi_url()
+        response = post(f"{url}/v1/vec/search", data={
+            'app_id': app._config.get_app_id(),
+            'key': app._config.get_search_key(),
+            'embedding': ','.join([str(x) for x in embedding]),
+            'top_k': top_k
+        })
+        if response.status_code != 200:
+            raise KasumiException(f"Failed to search embedding due to {response.text}")
+        response = response.json()
+        if response['code'] != 0:
+            raise KasumiException(f"Failed to search embedding due to {response['msg']}")
+        data = response['data']
+
+        result = []
+        for item in data:
+            embedding_item = KasumiEmbeddingItem([], item['_id'])
+            embedding_item.set_similarity(item['similarity'])
+            result.append(embedding_item)
+        return result
