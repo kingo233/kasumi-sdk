@@ -140,6 +140,9 @@ class AbstractKasumiSpider(ABC):
     def priority(self) -> int:
         pass
 
+    def __init__(self, app: AbstractKasumi) -> None:
+        self.app = app
+
     @abstractmethod
     def search(self, search_param: Dict) -> List[AbstractKasumiSearchResult]:
         pass

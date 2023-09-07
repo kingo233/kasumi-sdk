@@ -111,7 +111,8 @@ class KasumiSearchResultField(AbstractKasumiSearchResultField):
         return {
             "key": self._key,
             "content": self._content,
-            "llm_disabled": self._llm_disabled
+            "llm_disabled": self._llm_disabled,
+            "show_disabled": self._show_disabled
         }
 
 class KasumiSearchResult(AbstractKasumiSearchResult):
@@ -261,11 +262,23 @@ class Kasumi(AbstractKasumi):
             )
 
         ident = threading.get_ident()
-        self._sessions[ident] = KasumiSession()
+        token = request.get('token', '')
+        session = KasumiSession()
+        session._user_token = token
+        self._sessions[ident] = session
 
-        search_param = json.loads(request.get('search_param','{}'))
+        try:
+            search_param = request.get('search_param','{}')
+        except Exception as e:
+            print(e)
+            return KasumiSearchResponse(
+                code=200,
+                message="OK",
+                data=[KasumiSearchResult.load_from_dict({
+                    "error": "wrong search_param format.search param should be json string"
+                })]
+            )
         results = self._config.get_search_strategy().search(self,search_param)
-
         if ident in self._sessions:
             del self._sessions[ident]
 
