@@ -57,6 +57,20 @@ class KasumiEmbedding(AbstractKasumiEmbedding):
             embedding_item = KasumiEmbeddingItem([], item['_id'])
             items.append(embedding_item)
         return items[0]
+    
+    def del_embedding_by_id(self, app: AbstractKasumi, id: str) -> bool:
+        url = app._config.get_kasumi_url()
+        response = post(f"{url}/v1/vec/del/via_id", data={
+            'app_id': app._config.get_app_id(),
+            'key': app._config.get_search_key(),
+            'id': id
+        })
+        if response.status_code != 200:
+            raise KasumiException(f"Failed to delete embedding due to {response.text}")
+        response = response.json()
+        if response['code'] != 0:
+            raise KasumiException(f"Failed to delete embedding due to {response['msg']}")
+        return response['data'] == 'OK'
 
     def insert_embedding(self, app: AbstractKasumi, embedding: List[float], id: str) -> bool:
         url = app._config.get_kasumi_url()

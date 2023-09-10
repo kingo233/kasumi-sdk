@@ -232,6 +232,12 @@ class Kasumi(AbstractKasumi):
             return embedding
         except Exception as e:
             raise KasumiException("Failed to get embedding by id. for more information, please see the traceback. %s" % e)
+        
+    def del_embedding_by_id(self, id: str) -> bool:
+        try:
+            return self._embedding.del_embedding_by_id(self, id)
+        except Exception as e:
+            raise KasumiException("Failed to delete embedding by id. for more information, please see the traceback. %s" % e)
 
     def insert_embedding(self, embedding: List[float], id: str) -> bool:
         try:
