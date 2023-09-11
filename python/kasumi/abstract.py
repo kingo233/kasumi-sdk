@@ -261,7 +261,7 @@ class AbstractKasumi(ABC):
 
 class AbstractKasumiEmbedding(ABC):
     @abstractmethod
-    def insert_embedding(app: AbstractKasumi, embedding: List[float], id: str) -> bool:
+    def insert_embedding(self, app: AbstractKasumi, embedding: List[float], id: str) -> bool:
         """
         This function is used to insert an embedding into the Kasumi database.
 
@@ -275,7 +275,7 @@ class AbstractKasumiEmbedding(ABC):
         pass
 
     @abstractmethod
-    def embedding_text(app: AbstractKasumi, text: str, token_type: TokenType, token: str) -> List[float]:
+    def embedding_text(self, app: AbstractKasumi, text: str, token_type: TokenType, token: str) -> List[float]:
         """
         This function is used to get the embedding of a text.
 
@@ -289,7 +289,7 @@ class AbstractKasumiEmbedding(ABC):
         """
     
     @abstractmethod
-    def search_similarity(app: AbstractKasumi, embedding: List[float], top_k: int = 3) -> List[AbstractKasumiEmbeddingItem]:
+    def search_similarity(self, app: AbstractKasumi, embedding: List[float], top_k: int = 3) -> List[AbstractKasumiEmbeddingItem]:
         """
         This function is used to search for embeddings that are similar to a given embedding.
 
@@ -305,7 +305,7 @@ class AbstractKasumiEmbedding(ABC):
 
 
     @abstractmethod
-    def get_embedding_by_id(app: AbstractKasumi, id: str) -> AbstractKasumiEmbeddingItem:
+    def get_embedding_by_id(self, app: AbstractKasumi, id: str) -> AbstractKasumiEmbeddingItem:
         """
         This function is used to get the embedding of an item by its id.
 
@@ -315,5 +315,19 @@ class AbstractKasumiEmbedding(ABC):
         :param remote_search_key: The remote search key of the app, can be set in miduoduo developer platform.
         :param id: The id of the item.
         :return: The embedding of the item.
+        """
+        pass
+
+    @abstractmethod
+    def del_embedding_by_id(self, app: AbstractKasumi, id: str) -> bool:
+        """
+        This function is used to delete an embedding by its id.
+
+        delete embedding by id will cause at least 1 KaToken, so you should pass the token_type and token to this function.
+
+        :param app_id: The id of the app.
+        :param remote_search_key: The remote search key of the app, can be set in miduoduo developer platform.
+        :param id: The id of the item.
+        :return: True if the embedding was deleted successfully, False otherwise.
         """
         pass

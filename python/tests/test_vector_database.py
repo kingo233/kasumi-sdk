@@ -10,9 +10,9 @@ def test_vector_database():
 
     app = Kasumi(
         KasumiConfigration(
-            app_id=11,
+            app_id=8,
             token=token,
-            search_key="abcdef",
+            search_key="123",
             search_desc="",
             kasumi_url="http://localhost:8192",
         )
@@ -34,3 +34,13 @@ def test_vector_database():
         for item in embedding_dict:
             if item['id'] == rank.id:
                 print(f'text: {item["text"]}, similarity: {rank.get_similarity()}')
+
+    app.del_embedding_by_id(embedding_dict[0]['id'])
+    app.del_embedding_by_id(embedding_dict[1]['id'])
+    app.del_embedding_by_id(embedding_dict[2]['id'])
+
+    try:
+        item = app.get_embedding_by_id(embedding_dict[0]['id'])
+        return False
+    except:
+        return True
