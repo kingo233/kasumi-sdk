@@ -1,5 +1,5 @@
 from typing import List, Dict
-from kasumi import Kasumi,KasumiConfigration,DefaultSearchStrategy, AbstractKasumiSpider, KasumiSearchResult, KasumiSearchResultField
+from kasumi import AbstractKasumiSpider, KasumiSearchResult
 
 class PopipaSpider(AbstractKasumiSpider):
     @property
