@@ -215,7 +215,7 @@ Then we defined a token variable, this variable is used to identify your app. Yo
 
 Then we defined a Kasumi Application.And use app to get embedding and insert embedding.NOTE:You should manage the embedding vector and corresponding text by yourself to deal with LLM's search quest.Here we use local file system as example,you can use document database like mongodb to manage your embedding vector and corresponding text.
 
-So our spider may seem like this:
+So your spider may seem like this:
 ```python
     def __init__(self, app : Kasumi) -> None:
         super().__init__(app)
