@@ -7,7 +7,7 @@ import json
     It is used to interact with the Kasumi API.
 '''
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Iterator
+from typing import List, Dict, Any, Iterator, Union
 
 from enum import Enum
 
@@ -96,9 +96,17 @@ class AbstractKasumiSearchResultField(ABC):
     _content: str = ""
     _llm_disabled: bool = False
     _show_disabled: bool = False
+    _is_file: bool = False
+    _content_type: str = ""
+    _filename: str = ""
+    _url: str = ""
+    _filesize: int = 0
 
     @abstractmethod
-    def __init__(self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False):
+    def __init__(
+        self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False, 
+        is_file: bool = False, content_type: str = "", filename: str = "", url: str = "", filesize: int = 0
+    ):
         pass
 
     @abstractmethod
@@ -121,6 +129,18 @@ class AbstractKasumiSearchResult(ABC):
     @staticmethod
     @abstractmethod
     def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> AbstractKasumiSearchResult:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_file_dict(
+        content_type: str = 'application/octet-stream',
+        filename: str = 'file',
+        content: str = '',
+        filesize: int = 0,
+        key: str = 'result',
+        url: str = ''
+    ) -> Dict[str, Union[int, str]]:
         pass
 
     def __len__(self) -> int:

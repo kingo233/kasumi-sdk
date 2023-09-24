@@ -6,7 +6,7 @@ import json
     This file contains the class for the Kasumi SDK.
     It is used to interact with the Kasumi API.
 '''
-from typing import List, Dict, Any, Iterator, Tuple
+from typing import List, Dict, Any, Iterator, Tuple, Union
 from .abstract import *
 from .embedding import KasumiEmbedding
 
@@ -95,26 +95,49 @@ class KasumiSearchResultField(AbstractKasumiSearchResultField):
     _content: The content of the field.
     _llm_disabled: this field will not be sent to the LLM if this is set to True.
     _show_disabled: this field will not be shown to the client if this is set to True.
+    _is_file: this field is a file if this is set to True.
+        _content_type only works when _is_file is set to True.
+        _filename only works when _is_file is set to True.
+        _url only works when _is_file is set to True.
+        _filesize only works when _is_file is set to True.
     """
     _key: str = ""
     _content: str = ""
     _llm_disabled: bool = False
     _show_disabled: bool = False
+    _is_file: bool = False
+    _content_type: str = ""
+    _filename: str = ""
+    _url: str = ""
+    _filesize: int = 0
 
-    def __init__(self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False):
+    def __init__(
+        self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False, 
+        is_file: bool = False, content_type: str = "", filename: str = "", url: str = "", filesize: int = 0
+    ):
         self._key = key
         self._content = content
         self._llm_disabled = llm_disabled
         self._show_disabled = show_disabled
+        self._is_file = is_file
+        self._content_type = content_type
+        self._filename = filename
+        self._url = url
+        self._filesize = filesize
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "key": self._key,
             "content": self._content,
             "llm_disabled": self._llm_disabled,
-            "show_disabled": self._show_disabled
+            "show_disabled": self._show_disabled,
+            "is_file": self._is_file,
+            "content_type": self._content_type,
+            "filename": self._filename,
+            "url": self._url,
+            "filesize": self._filesize
         }
-
+    
 class KasumiSearchResult(AbstractKasumiSearchResult):
     _fields: List[KasumiSearchResultField] = []
 
@@ -127,7 +150,28 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
         }
     
     @staticmethod
-    def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> KasumiSearchResult:
+    def load_from_dict(
+        data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None,
+        files: List[Dict[str, Union[int, str]]] = None
+    ) -> KasumiSearchResult:
+        '''
+            data will be sent to the LLM as normal text.
+            disabled_llm_columns: this field will not be sent to the LLM if this is set to True.
+            disabled_show_columns: this field will not be shown to the client if this is set to True.
+            files: all files in this search result. be like this:
+                [
+                    {
+                        "content_type": "image/png",
+                        "filename": "1.png",
+                        "url": "http://xxx.com/file/1.png",
+                        "filesize": 1024",
+                        "content": "anything",
+                        "key": "result"
+                    }
+                ]
+                content will not work if the url is set, but the key is still needed.
+                if the url is not set, the content will be upload to kasumi OSS and the url will be set automatically.
+        '''
         disabled_llm_columns = disabled_llm_columns or []
         disabled_show_columns = disabled_show_columns or []
 
@@ -138,7 +182,34 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
                 key=key, content=value, llm_disabled=key in disabled_llm_columns, show_disabled=key in disabled_show_columns
             ))
 
+        for file in files or []:
+            fields.append(KasumiSearchResultField(
+                key=file['key'], content=file['content'], 
+                llm_disabled=file['key'] in disabled_llm_columns, 
+                show_disabled=file['key'] in disabled_show_columns, 
+                is_file=True, content_type=file['content_type'], 
+                filename=file['filename'], url=file['url'], filesize=file['filesize']
+            ))
+
         return KasumiSearchResult(fields)
+
+    @staticmethod
+    def get_file_dict(
+        content_type: str = 'application/octet-stream',
+        filename: str = 'file',
+        content: str = '',
+        filesize: int = 0,
+        key: str = 'result',
+        url: str = ''
+    ) -> Dict[str, Union[int, str]]:
+        return {
+            "content_type": content_type,
+            "filename": filename,
+            "content": content,
+            "filesize": filesize,
+            "key": key,
+            "url": url
+        }
 
 class KasumiSearchResponse(AbstractKasumiSearchResponse):
     _code: int = 0
@@ -297,6 +368,7 @@ class Kasumi(AbstractKasumi):
 
         @self.app.route('/info', methods=['POST'])
         def info():
+            print(flask.request.get_json())
             request = flask.request.get_json()
             info_response = self._handle_request_info(request)
             return info_response.to_flask_response()
