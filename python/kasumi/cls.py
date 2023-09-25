@@ -384,3 +384,13 @@ class Kasumi(AbstractKasumi):
         from eventlet import wsgi, listen
         server = listen(('0.0.0.0', http_port))
         wsgi.server(server, self.app)
+
+    def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
+        '''
+            upload file to kasumi oss
+            return url
+            exception will be raised if upload failed
+        '''
+        from .upload import upload_bytes_with_upload_url, request_upload_url
+        url = request_upload_url(filename, self._config.get_app_id(), self._config.get_search_key(), self._config.get_kasumi_url())
+        return upload_bytes_with_upload_url(url, file, content_type)

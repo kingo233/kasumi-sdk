@@ -278,6 +278,9 @@ class AbstractKasumi(ABC):
     def run_forever(self) -> None:
         pass
 
+    @abstractmethod
+    def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
+        pass
 
 class AbstractKasumiEmbedding(ABC):
     @abstractmethod
