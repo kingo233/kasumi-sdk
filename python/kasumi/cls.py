@@ -6,7 +6,7 @@ import json
     This file contains the class for the Kasumi SDK.
     It is used to interact with the Kasumi API.
 '''
-from typing import List, Dict, Any, Iterator, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union
 from .abstract import *
 from .embedding import KasumiEmbedding
 
@@ -17,7 +17,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
     This class is used to implement the default search strategy.
     '''
 
-    def on_single_result(result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
+    def on_single_result(result: List[KasumiActionResult]) -> Tuple[bool, List[KasumiActionResult]]:
         '''
             on single result,return processed single_result and complete search
             for simple scenario, can just judge if result empty
@@ -28,7 +28,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
         else:
             return True,result
         
-    def on_all_result(result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
+    def on_all_result(result: List[List[KasumiActionResult]]) -> List[KasumiActionResult]:
         '''
             on all result, maybe we can do some post process here
             for simple scenario, can just return first non-empty result
@@ -41,11 +41,13 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
                 break
         return temp_result
 
-    def search(app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
-        spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
+    def action(app: 'Kasumi', action_name: str, action_param: Dict) -> List[KasumiActionResult]:
+        actions = sorted(app.get_actions(), key=lambda action: action.priority, reverse=True)
         all_results = []
-        for spider in spiders:
-            single_result = spider.search(search_param)
+        for action in actions:
+            if action.name != action_name:
+                continue
+            single_result = action.action(action_param)
             complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
             all_results.append(single_result)
             if complete:
@@ -57,10 +59,9 @@ class KasumiConfigration(AbstractKasumiConfigration):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
-    _search_desc : str = ""
     _search_strategy: AbstractKasumiSearchStrategy  
 
-    def __init__(self, app_id: int, token: str, search_key: str, search_desc: str, 
+    def __init__(self, app_id: int, token: str, search_key: str,
                   search_strategy: AbstractKasumiSearchStrategy = DefaultSearchStrategy,
                   kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
@@ -68,7 +69,6 @@ class KasumiConfigration(AbstractKasumiConfigration):
         self._search_key = search_key
         self._search_strategy = search_strategy
         self._kasumi_url = kasumi_url
-        self._search_desc = search_desc
 
     def get_app_id(self) -> int:
         return self._app_id
@@ -82,13 +82,10 @@ class KasumiConfigration(AbstractKasumiConfigration):
     def get_kasumi_url(self) -> str:
         return self._kasumi_url
     
-    def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
+    def get_action_strategy(self) -> AbstractKasumiSearchStrategy:
         return self._search_strategy
-    
-    def get_search_desc(self) -> str:
-        return self._search_desc
 
-class KasumiSearchResultField(AbstractKasumiSearchResultField):
+class KasumiActionResultField(AbstractKasumiActionResultField):
     """
     KasumiSearchResultField is used to represent a field in the search result.
     _key: The key of the field.
@@ -138,10 +135,10 @@ class KasumiSearchResultField(AbstractKasumiSearchResultField):
             "filesize": self._filesize
         }
     
-class KasumiSearchResult(AbstractKasumiSearchResult):
-    _fields: List[KasumiSearchResultField] = []
+class KasumiActionResult(AbstractKasumiActionResult):
+    _fields: List[KasumiActionResultField] = []
 
-    def __init__(self, fields: List[KasumiSearchResultField]):
+    def __init__(self, fields: List[KasumiActionResultField]):
         self._fields = fields
 
     def to_dict(self) -> Dict[str, Any]:
@@ -153,7 +150,7 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
     def load_from_dict(
         data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None,
         files: List[Dict[str, Union[int, str]]] = None
-    ) -> KasumiSearchResult:
+    ) -> KasumiActionResult:
         '''
             data will be sent to the LLM as normal text.
             disabled_llm_columns: this field will not be sent to the LLM if this is set to True.
@@ -178,12 +175,12 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
         fields = []
         for key in data:
             value = data[key]
-            fields.append(KasumiSearchResultField(
+            fields.append(KasumiActionResultField(
                 key=key, content=value, llm_disabled=key in disabled_llm_columns, show_disabled=key in disabled_show_columns
             ))
 
         for file in files or []:
-            fields.append(KasumiSearchResultField(
+            fields.append(KasumiActionResultField(
                 key=file['key'], content=file['content'], 
                 llm_disabled=file['key'] in disabled_llm_columns, 
                 show_disabled=file['key'] in disabled_show_columns, 
@@ -191,7 +188,7 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
                 filename=file['filename'], url=file['url'], filesize=file['filesize']
             ))
 
-        return KasumiSearchResult(fields)
+        return KasumiActionResult(fields)
 
     @staticmethod
     def get_file_dict(
@@ -211,12 +208,12 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
             "url": url
         }
 
-class KasumiSearchResponse(AbstractKasumiSearchResponse):
+class KasumiActionResponse(AbstractKasumiActionResponse):
     _code: int = 0
     _message: str = ""
-    _data: List[KasumiSearchResult]
+    _data: List[KasumiActionResult]
 
-    def __init__(self, code: int, message: str, data: List[KasumiSearchResult]):
+    def __init__(self, code: int, message: str, data: List[KasumiActionResult]):
         self._code = code
         self._message = message
         self._data = data
@@ -227,7 +224,7 @@ class KasumiSearchResponse(AbstractKasumiSearchResponse):
     def get_message(self) -> str:
         return self._message
 
-    def get_data(self) -> List[KasumiSearchResult]:
+    def get_data(self) -> List[KasumiActionResult]:
         return self._data
     
     def __str__(self) -> str:
@@ -271,7 +268,7 @@ class Kasumi(AbstractKasumi):
     :raises all methods in Kasumi may raise KasumiException if the Kasumi API returns an error.
     """
     _config: KasumiConfigration = None
-    _spiders: List[AbstractKasumiSpider] = []
+    _actions: List[AbstractKasumiAction] = []
     _sessions: Dict[int, KasumiSession] = {}
     _embedding: AbstractKasumiEmbedding = KasumiEmbedding()
 
@@ -316,25 +313,33 @@ class Kasumi(AbstractKasumi):
         except Exception as e:
             raise KasumiException("Failed to insert embedding. for more information, please see the traceback. %s" % e)
 
-    def add_spider(self, spider: AbstractKasumiSpider) -> None:
-        self._spiders.append(spider)
+    def add_action(self, action: AbstractKasumiAction) -> None:
+        action.set_app(self)
+        self._actions.append(action)
 
-    def get_spiders(self) -> List[AbstractKasumiSpider]:
-        return self._spiders
+    def get_actions(self) -> List[AbstractKasumiAction]:
+        return self._actions
 
     def _handle_request_info(self, request: Dict[str, Any]) -> KasumiInfoResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
             return KasumiInfoResponse(
                 code=401, message="Unauthorized", data={}
             )
+        
+        desc = 'there are %d actions available:' % len(self._actions)
+        for action in self._actions:
+            desc += '\n\nname: %s' % action.name
+            desc += '\ndescription: %s' % action.description
+            desc += '\nparams example: %s' % json.dumps(action.param_template)
+            desc += '\n\n'
 
         return KasumiInfoResponse(
-            code=200, message="OK", data= self._config.get_search_desc(),
+            code=200, message="OK", data=desc,
         )
 
-    def _handle_request_search(self, request: Dict[str, Any]) -> KasumiSearchResponse:
+    def _handle_request_action(self, request: Dict[str, Any]) -> KasumiActionResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
-            return KasumiSearchResponse(
+            return KasumiActionResponse(
                 code=401, message="Unauthorized", data=[]
             )
 
@@ -344,22 +349,14 @@ class Kasumi(AbstractKasumi):
         session._user_token = token
         self._sessions[ident] = session
 
-        try:
-            search_param = request.get('search_param','{}')
-        except Exception as e:
-            print(e)
-            return KasumiSearchResponse(
-                code=200,
-                message="OK",
-                data=[KasumiSearchResult.load_from_dict({
-                    "error": "wrong search_param format.search param should be json string"
-                })]
-            )
-        results = self._config.get_search_strategy().search(self,search_param)
+        action_param = request.get('action_param','{}')
+        action_name = action_param.get('action_name','')
+
+        results = self._config.get_action_strategy().action(self, action_name, action_param)
         if ident in self._sessions:
             del self._sessions[ident]
 
-        return KasumiSearchResponse(
+        return KasumiActionResponse(
             code=200, message="OK", data=results
         )
 
@@ -373,11 +370,11 @@ class Kasumi(AbstractKasumi):
             info_response = self._handle_request_info(request)
             return info_response.to_flask_response()
         
-        @self.app.route('/search', methods=['POST'])
-        def search():
+        @self.app.route('/action', methods=['POST'])
+        def action():
             request = flask.request.get_json()
-            search_response = self._handle_request_search(request)
-            return search_response.to_flask_response()
+            action_response = self._handle_request_action(request)
+            return action_response.to_flask_response()
 
         # launch http server
         global server

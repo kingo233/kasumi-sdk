@@ -1,7 +1,7 @@
 from typing import List, Dict
-from kasumi import Kasumi,KasumiConfigration,DefaultSearchStrategy, AbstractKasumiSpider, KasumiSearchResult, KasumiSearchResultField
+from kasumi import Kasumi,KasumiConfigration,DefaultSearchStrategy, AbstractKasumiAction, KasumiActionResult, KasumiActionResultField
 
-class PopipaSpider(AbstractKasumiSpider):
+class PopipaSpider(AbstractKasumiAction):
     @property
     def name(self) -> str:
         return "popipa"
@@ -10,7 +10,7 @@ class PopipaSpider(AbstractKasumiSpider):
     def priority(self) -> int:
         return 1
 
-    def search(self, search_param : Dict) -> List[KasumiSearchResult]:
+    def action(self, search_param : Dict) -> List[KasumiActionResult]:
         name = search_param.get("name",'')
         if len(name) == 0:
             return []
@@ -30,7 +30,7 @@ class PopipaSpider(AbstractKasumiSpider):
                     "想法很直率，但是是一个十分冷静，很清楚知道为了别人该怎么做的孩子。家人是父亲母亲和20只兔子。",
         }
         text = mini_database.get(name,'not found')
-        result = KasumiSearchResult.load_from_dict({
+        result = KasumiActionResult.load_from_dict({
             'result':text,
         })
         return [result]
