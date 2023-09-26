@@ -1,4 +1,5 @@
 from typing import List, Dict
+
 from kasumi import Kasumi,KasumiConfigration,DefaultSearchStrategy, AbstractKasumiAction, KasumiActionResult, KasumiActionResultField
 
 class PopipaSpider(AbstractKasumiAction):
