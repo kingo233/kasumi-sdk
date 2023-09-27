@@ -7,7 +7,7 @@ import json
     It is used to interact with the Kasumi API.
 '''
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Iterator
+from typing import List, Dict, Any, Iterator, Union
 
 from enum import Enum
 
@@ -51,7 +51,6 @@ class AbstractKasumiConfigration(ABC):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
-    _search_desc : str = ""
     _search_strategy: AbstractKasumiSearchStrategy
 
     @abstractmethod
@@ -77,14 +76,10 @@ class AbstractKasumiConfigration(ABC):
         pass
 
     @abstractmethod
-    def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
+    def get_action_strategy(self) -> AbstractKasumiSearchStrategy:
         pass
 
-    @abstractmethod
-    def get_search_desc(self) -> str:
-        pass
-
-class AbstractKasumiSearchResultField(ABC):
+class AbstractKasumiActionResultField(ABC):
     """
     AbstractAbstractKasumiSearchResultField is used to represent a field in the search result.
     _key: The key of the field.
@@ -96,20 +91,28 @@ class AbstractKasumiSearchResultField(ABC):
     _content: str = ""
     _llm_disabled: bool = False
     _show_disabled: bool = False
+    _is_file: bool = False
+    _content_type: str = ""
+    _filename: str = ""
+    _url: str = ""
+    _filesize: int = 0
 
     @abstractmethod
-    def __init__(self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False):
+    def __init__(
+        self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False, 
+        is_file: bool = False, content_type: str = "", filename: str = "", url: str = "", filesize: int = 0
+    ):
         pass
 
     @abstractmethod
     def to_dict(self) -> Dict[str, Any]:
         pass
 
-class AbstractKasumiSearchResult(ABC):
-    _fields: List[AbstractKasumiSearchResultField] = []
+class AbstractKasumiActionResult(ABC):
+    _fields: List[AbstractKasumiActionResultField] = []
 
     @abstractmethod
-    def __init__(self, fields: List[AbstractKasumiSearchResultField]):
+    def __init__(self, fields: List[AbstractKasumiActionResultField]):
         self.fields = fields
     
     @abstractmethod
@@ -120,7 +123,19 @@ class AbstractKasumiSearchResult(ABC):
     
     @staticmethod
     @abstractmethod
-    def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> AbstractKasumiSearchResult:
+    def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> AbstractKasumiActionResult:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_file_dict(
+        content_type: str = 'application/octet-stream',
+        filename: str = 'file',
+        content: str = '',
+        filesize: int = 0,
+        key: str = 'result',
+        url: str = ''
+    ) -> Dict[str, Union[int, str]]:
         pass
 
     def __len__(self) -> int:
@@ -129,7 +144,9 @@ class AbstractKasumiSearchResult(ABC):
     def __str__(self) -> str:
         return str(self.to_dict())
 
-class AbstractKasumiSpider(ABC):
+class AbstractKasumiAction(ABC):
+    app: AbstractKasumi = None
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -140,35 +157,51 @@ class AbstractKasumiSpider(ABC):
     def priority(self) -> int:
         pass
 
-    def __init__(self, app: AbstractKasumi) -> None:
-        self.app = app
-
-    @abstractmethod
-    def search(self, search_param: Dict) -> List[AbstractKasumiSearchResult]:
-        pass
-
-class AbstractKasumiSearchStrategy(ABC):
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        pass
-
     @property
     @abstractmethod
     def description(self) -> str:
         pass
 
+    @property
     @abstractmethod
-    def search(app: AbstractKasumi, search_param: Dict) -> List[AbstractKasumiSearchResult]:
+    def param_template(self) -> Dict[str, str]:
+        '''
+            return a dict of param template like {"name": "aaaa", "age": 18}
+        '''
         pass
 
-class AbstractKasumiSearchResponse(ABC):
-    _code: int = 0
-    _message: str = ""
-    _data: List[AbstractKasumiSearchResult]
+    def __init__(self) -> None:
+        pass
+
+    def set_app(self, app: AbstractKasumi) -> None:
+        self.app = app
 
     @abstractmethod
-    def __init__(self, code: int, message: str, data: List[AbstractKasumiSearchResult]):
+    def action(self, search_param: Dict) -> List[AbstractKasumiActionResult]:
+        pass
+
+class AbstractKasumiSearchStrategy(ABC):
+    @property
+    @abstractmethod
+    def name() -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def description() -> str:
+        pass
+
+    @abstractmethod
+    def action(app: AbstractKasumi, action_name: str, action_param: Dict) -> List[AbstractKasumiActionResult]:
+        pass
+
+class AbstractKasumiActionResponse(ABC):
+    _code: int = 0
+    _message: str = ""
+    _data: List[AbstractKasumiActionResult]
+
+    @abstractmethod
+    def __init__(self, code: int, message: str, data: List[AbstractKasumiActionResult]):
         pass
 
     @abstractmethod
@@ -180,7 +213,7 @@ class AbstractKasumiSearchResponse(ABC):
         pass
 
     @abstractmethod
-    def get_data(self) -> List[AbstractKasumiSearchResult]:
+    def get_data(self) -> List[AbstractKasumiActionResult]:
         pass
 
     def to_flask_response(self) -> flask.Response:
@@ -230,7 +263,7 @@ class AbstractKasumi(ABC):
     :raises all methods in Kasumi may raise KasumiException if the Kasumi API returns an error.
     """
     _config: AbstractKasumiConfigration = None
-    _spiders: List[AbstractKasumiSpider] = []
+    _actions: List[AbstractKasumiAction] = []
     _sessions: Dict[int, AbstractKasumiSession] = {}
     _embedding: AbstractKasumiEmbedding
 
@@ -239,11 +272,11 @@ class AbstractKasumi(ABC):
         pass
 
     @abstractmethod
-    def add_spider(self, spider: AbstractKasumiSpider) -> None:
+    def add_action(self, action: AbstractKasumiAction) -> None:
         pass
 
     @abstractmethod
-    def get_spiders(self) -> List[AbstractKasumiSpider]:
+    def get_actions(self) -> List[AbstractKasumiAction]:
         pass
 
     @abstractmethod
@@ -251,13 +284,16 @@ class AbstractKasumi(ABC):
         pass
     
     @abstractmethod
-    def _handle_request_search(self, request: Dict[str, Any]) -> AbstractKasumiSearchResponse:
+    def _handle_request_action(self, request: Dict[str, Any]) -> AbstractKasumiActionResponse:
         pass
 
     @abstractmethod
     def run_forever(self) -> None:
         pass
 
+    @abstractmethod
+    def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
+        pass
 
 class AbstractKasumiEmbedding(ABC):
     @abstractmethod
