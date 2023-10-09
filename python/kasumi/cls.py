@@ -12,7 +12,7 @@ from .embedding import KasumiEmbedding
 
 import threading
 
-class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
+class DefaultActionStrategy(AbstractKasumiActionStrategy):
     '''
     This class is used to implement the default search strategy.
     '''
@@ -48,26 +48,26 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
             if action.name != action_name:
                 continue
             single_result = action.action(action_param)
-            complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
+            complete,single_result = DefaultActionStrategy.on_single_result(single_result)
             all_results.append(single_result)
             if complete:
                 break
-        return DefaultSearchStrategy.on_all_result(all_results)
+        return DefaultActionStrategy.on_all_result(all_results)
 
 class KasumiConfigration(AbstractKasumiConfigration):
     _token: str = ""
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
-    _search_strategy: AbstractKasumiSearchStrategy  
+    _action_strategy: AbstractKasumiActionStrategy  
 
     def __init__(self, app_id: int, token: str, search_key: str,
-                  search_strategy: AbstractKasumiSearchStrategy = DefaultSearchStrategy,
+                  search_strategy: AbstractKasumiActionStrategy = DefaultActionStrategy,
                   kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
         self._token = token
         self._search_key = search_key
-        self._search_strategy = search_strategy
+        self._action_strategy = search_strategy
         self._kasumi_url = kasumi_url
 
     def get_app_id(self) -> int:
@@ -82,8 +82,8 @@ class KasumiConfigration(AbstractKasumiConfigration):
     def get_kasumi_url(self) -> str:
         return self._kasumi_url
     
-    def get_action_strategy(self) -> AbstractKasumiSearchStrategy:
-        return self._search_strategy
+    def get_action_strategy(self) -> AbstractKasumiActionStrategy:
+        return self._action_strategy
 
 class KasumiActionResultField(AbstractKasumiActionResultField):
     """
@@ -228,7 +228,7 @@ class KasumiActionResponse(AbstractKasumiActionResponse):
         return self._data
     
     def __str__(self) -> str:
-        return f"KasumiSearchResponse(code={self._code},message={self._message},data={self._data})"
+        return f"KasumiActionResponse(code={self._code},message={self._message},data={self._data})"
     
     def to_dict(self) -> Dict[str, Any]:
         return {

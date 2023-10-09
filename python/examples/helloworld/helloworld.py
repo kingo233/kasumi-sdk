@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from kasumi import Kasumi,KasumiConfigration,DefaultSearchStrategy, AbstractKasumiAction, KasumiActionResult, KasumiActionResultField
+from kasumi import Kasumi,KasumiConfigration,DefaultActionStrategy, AbstractKasumiAction, KasumiActionResult, KasumiActionResultField
 
 class PopipaSpider(AbstractKasumiAction):
     @property

@@ -51,11 +51,11 @@ class AbstractKasumiConfigration(ABC):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
-    _search_strategy: AbstractKasumiSearchStrategy
+    _search_strategy: AbstractKasumiActionStrategy
 
     @abstractmethod
     def __init__(self, app_id: int, token: str, search_key: str, 
-                 search_desc: str, search_strategy: AbstractKasumiSearchStrategy,
+                 search_desc: str, search_strategy: AbstractKasumiActionStrategy,
                  kasumi_url: str = "http://kasumi.miduoduo.org:8196"):
         pass
 
@@ -76,7 +76,7 @@ class AbstractKasumiConfigration(ABC):
         pass
 
     @abstractmethod
-    def get_action_strategy(self) -> AbstractKasumiSearchStrategy:
+    def get_action_strategy(self) -> AbstractKasumiActionStrategy:
         pass
 
 class AbstractKasumiActionResultField(ABC):
@@ -180,7 +180,7 @@ class AbstractKasumiAction(ABC):
     def action(self, search_param: Dict) -> List[AbstractKasumiActionResult]:
         pass
 
-class AbstractKasumiSearchStrategy(ABC):
+class AbstractKasumiActionStrategy(ABC):
     @property
     @abstractmethod
     def name() -> str:
