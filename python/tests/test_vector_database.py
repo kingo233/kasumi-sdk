@@ -13,7 +13,6 @@ def test_vector_database():
             app_id=8,
             token=token,
             search_key="123",
-            search_desc="",
             kasumi_url="http://localhost:8192",
         )
     )

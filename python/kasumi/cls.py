@@ -6,7 +6,7 @@ import json
     This file contains the class for the Kasumi SDK.
     It is used to interact with the Kasumi API.
 '''
-from typing import List, Dict, Any, Iterator, Tuple
+from typing import List, Dict, Any, Tuple, Union
 from .abstract import *
 from .embedding import KasumiEmbedding
 
@@ -17,7 +17,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
     This class is used to implement the default search strategy.
     '''
 
-    def on_single_result(result: List[KasumiSearchResult]) -> Tuple[bool, List[KasumiSearchResult]]:
+    def on_single_result(result: List[KasumiActionResult]) -> Tuple[bool, List[KasumiActionResult]]:
         '''
             on single result,return processed single_result and complete search
             for simple scenario, can just judge if result empty
@@ -28,7 +28,7 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
         else:
             return True,result
         
-    def on_all_result(result: List[List[KasumiSearchResult]]) -> List[KasumiSearchResult]:
+    def on_all_result(result: List[List[KasumiActionResult]]) -> List[KasumiActionResult]:
         '''
             on all result, maybe we can do some post process here
             for simple scenario, can just return first non-empty result
@@ -41,11 +41,13 @@ class DefaultSearchStrategy(AbstractKasumiSearchStrategy):
                 break
         return temp_result
 
-    def search(app: 'Kasumi', search_param: Dict) -> List[KasumiSearchResult]:
-        spiders = sorted(app.get_spiders(), key=lambda spider: spider.priority, reverse=True)
+    def action(app: 'Kasumi', action_name: str, action_param: Dict) -> List[KasumiActionResult]:
+        actions = sorted(app.get_actions(), key=lambda action: action.priority, reverse=True)
         all_results = []
-        for spider in spiders:
-            single_result = spider.search(search_param)
+        for action in actions:
+            if action.name != action_name:
+                continue
+            single_result = action.action(action_param)
             complete,single_result = DefaultSearchStrategy.on_single_result(single_result)
             all_results.append(single_result)
             if complete:
@@ -57,10 +59,9 @@ class KasumiConfigration(AbstractKasumiConfigration):
     _search_key: str = ""
     _kasumi_url: str = ""
     _app_id: int = 0
-    _search_desc : str = ""
     _search_strategy: AbstractKasumiSearchStrategy  
 
-    def __init__(self, app_id: int, token: str, search_key: str, search_desc: str, 
+    def __init__(self, app_id: int, token: str, search_key: str,
                   search_strategy: AbstractKasumiSearchStrategy = DefaultSearchStrategy,
                   kasumi_url: str = "http://kasumi.miduoduo.org:8192"):
         self._app_id = app_id
@@ -68,7 +69,6 @@ class KasumiConfigration(AbstractKasumiConfigration):
         self._search_key = search_key
         self._search_strategy = search_strategy
         self._kasumi_url = kasumi_url
-        self._search_desc = search_desc
 
     def get_app_id(self) -> int:
         return self._app_id
@@ -82,43 +82,63 @@ class KasumiConfigration(AbstractKasumiConfigration):
     def get_kasumi_url(self) -> str:
         return self._kasumi_url
     
-    def get_search_strategy(self) -> AbstractKasumiSearchStrategy:
+    def get_action_strategy(self) -> AbstractKasumiSearchStrategy:
         return self._search_strategy
-    
-    def get_search_desc(self) -> str:
-        return self._search_desc
 
-class KasumiSearchResultField(AbstractKasumiSearchResultField):
+class KasumiActionResultField(AbstractKasumiActionResultField):
     """
     KasumiSearchResultField is used to represent a field in the search result.
     _key: The key of the field.
     _content: The content of the field.
     _llm_disabled: this field will not be sent to the LLM if this is set to True.
     _show_disabled: this field will not be shown to the client if this is set to True.
+    _is_file: this field is a file if this is set to True.
+        _content_type only works when _is_file is set to True.
+        _filename only works when _is_file is set to True.
+        _url only works when _is_file is set to True.
+        _filesize only works when _is_file is set to True.
     """
     _key: str = ""
     _content: str = ""
     _llm_disabled: bool = False
     _show_disabled: bool = False
+    _is_file: bool = False
+    _content_type: str = ""
+    _filename: str = ""
+    _url: str = ""
+    _filesize: int = 0
 
-    def __init__(self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False):
+    def __init__(
+        self,key: str, content: str, llm_disabled: bool = False, show_disabled: bool = False, 
+        is_file: bool = False, content_type: str = "", filename: str = "", url: str = "", filesize: int = 0
+    ):
         self._key = key
         self._content = content
         self._llm_disabled = llm_disabled
         self._show_disabled = show_disabled
+        self._is_file = is_file
+        self._content_type = content_type
+        self._filename = filename
+        self._url = url
+        self._filesize = filesize
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "key": self._key,
             "content": self._content,
             "llm_disabled": self._llm_disabled,
-            "show_disabled": self._show_disabled
+            "show_disabled": self._show_disabled,
+            "is_file": self._is_file,
+            "content_type": self._content_type,
+            "filename": self._filename,
+            "url": self._url,
+            "filesize": self._filesize
         }
+    
+class KasumiActionResult(AbstractKasumiActionResult):
+    _fields: List[KasumiActionResultField] = []
 
-class KasumiSearchResult(AbstractKasumiSearchResult):
-    _fields: List[KasumiSearchResultField] = []
-
-    def __init__(self, fields: List[KasumiSearchResultField]):
+    def __init__(self, fields: List[KasumiActionResultField]):
         self._fields = fields
 
     def to_dict(self) -> Dict[str, Any]:
@@ -127,25 +147,73 @@ class KasumiSearchResult(AbstractKasumiSearchResult):
         }
     
     @staticmethod
-    def load_from_dict(data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None) -> KasumiSearchResult:
+    def load_from_dict(
+        data: Dict[str, Any], disabled_llm_columns: List[str] = None, disabled_show_columns: List[str] = None,
+        files: List[Dict[str, Union[int, str]]] = None
+    ) -> KasumiActionResult:
+        '''
+            data will be sent to the LLM as normal text.
+            disabled_llm_columns: this field will not be sent to the LLM if this is set to True.
+            disabled_show_columns: this field will not be shown to the client if this is set to True.
+            files: all files in this search result. be like this:
+                [
+                    {
+                        "content_type": "image/png",
+                        "filename": "1.png",
+                        "url": "http://xxx.com/file/1.png",
+                        "filesize": 1024",
+                        "content": "anything",
+                        "key": "result"
+                    }
+                ]
+                content will not work if the url is set, but the key is still needed.
+                if the url is not set, the content will be upload to kasumi OSS and the url will be set automatically.
+        '''
         disabled_llm_columns = disabled_llm_columns or []
         disabled_show_columns = disabled_show_columns or []
 
         fields = []
         for key in data:
             value = data[key]
-            fields.append(KasumiSearchResultField(
+            fields.append(KasumiActionResultField(
                 key=key, content=value, llm_disabled=key in disabled_llm_columns, show_disabled=key in disabled_show_columns
             ))
 
-        return KasumiSearchResult(fields)
+        for file in files or []:
+            fields.append(KasumiActionResultField(
+                key=file['key'], content=file['content'], 
+                llm_disabled=file['key'] in disabled_llm_columns, 
+                show_disabled=file['key'] in disabled_show_columns, 
+                is_file=True, content_type=file['content_type'], 
+                filename=file['filename'], url=file['url'], filesize=file['filesize']
+            ))
 
-class KasumiSearchResponse(AbstractKasumiSearchResponse):
+        return KasumiActionResult(fields)
+
+    @staticmethod
+    def get_file_dict(
+        content_type: str = 'application/octet-stream',
+        filename: str = 'file',
+        content: str = '',
+        filesize: int = 0,
+        key: str = 'result',
+        url: str = ''
+    ) -> Dict[str, Union[int, str]]:
+        return {
+            "content_type": content_type,
+            "filename": filename,
+            "content": content,
+            "filesize": filesize,
+            "key": key,
+            "url": url
+        }
+
+class KasumiActionResponse(AbstractKasumiActionResponse):
     _code: int = 0
     _message: str = ""
-    _data: List[KasumiSearchResult]
+    _data: List[KasumiActionResult]
 
-    def __init__(self, code: int, message: str, data: List[KasumiSearchResult]):
+    def __init__(self, code: int, message: str, data: List[KasumiActionResult]):
         self._code = code
         self._message = message
         self._data = data
@@ -156,7 +224,7 @@ class KasumiSearchResponse(AbstractKasumiSearchResponse):
     def get_message(self) -> str:
         return self._message
 
-    def get_data(self) -> List[KasumiSearchResult]:
+    def get_data(self) -> List[KasumiActionResult]:
         return self._data
     
     def __str__(self) -> str:
@@ -200,7 +268,7 @@ class Kasumi(AbstractKasumi):
     :raises all methods in Kasumi may raise KasumiException if the Kasumi API returns an error.
     """
     _config: KasumiConfigration = None
-    _spiders: List[AbstractKasumiSpider] = []
+    _actions: List[AbstractKasumiAction] = []
     _sessions: Dict[int, KasumiSession] = {}
     _embedding: AbstractKasumiEmbedding = KasumiEmbedding()
 
@@ -245,25 +313,33 @@ class Kasumi(AbstractKasumi):
         except Exception as e:
             raise KasumiException("Failed to insert embedding. for more information, please see the traceback. %s" % e)
 
-    def add_spider(self, spider: AbstractKasumiSpider) -> None:
-        self._spiders.append(spider)
+    def add_action(self, action: AbstractKasumiAction) -> None:
+        action.set_app(self)
+        self._actions.append(action)
 
-    def get_spiders(self) -> List[AbstractKasumiSpider]:
-        return self._spiders
+    def get_actions(self) -> List[AbstractKasumiAction]:
+        return self._actions
 
     def _handle_request_info(self, request: Dict[str, Any]) -> KasumiInfoResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
             return KasumiInfoResponse(
                 code=401, message="Unauthorized", data={}
             )
+        
+        desc = 'there are %d actions available:' % len(self._actions)
+        for action in self._actions:
+            desc += '\n\nname: %s' % action.name
+            desc += '\ndescription: %s' % action.description
+            desc += '\nparams example: %s' % json.dumps(action.param_template)
+            desc += '\n\n'
 
         return KasumiInfoResponse(
-            code=200, message="OK", data= self._config.get_search_desc(),
+            code=200, message="OK", data=desc,
         )
 
-    def _handle_request_search(self, request: Dict[str, Any]) -> KasumiSearchResponse:
+    def _handle_request_action(self, request: Dict[str, Any]) -> KasumiActionResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
-            return KasumiSearchResponse(
+            return KasumiActionResponse(
                 code=401, message="Unauthorized", data=[]
             )
 
@@ -273,22 +349,14 @@ class Kasumi(AbstractKasumi):
         session._user_token = token
         self._sessions[ident] = session
 
-        try:
-            search_param = request.get('search_param','{}')
-        except Exception as e:
-            print(e)
-            return KasumiSearchResponse(
-                code=200,
-                message="OK",
-                data=[KasumiSearchResult.load_from_dict({
-                    "error": "wrong search_param format.search param should be json string"
-                })]
-            )
-        results = self._config.get_search_strategy().search(self,search_param)
+        action_param = request.get('action_param','{}')
+        action_name = action_param.get('action_name','')
+
+        results = self._config.get_action_strategy().action(self, action_name, action_param)
         if ident in self._sessions:
             del self._sessions[ident]
 
-        return KasumiSearchResponse(
+        return KasumiActionResponse(
             code=200, message="OK", data=results
         )
 
@@ -297,18 +365,29 @@ class Kasumi(AbstractKasumi):
 
         @self.app.route('/info', methods=['POST'])
         def info():
+            print(flask.request.get_json())
             request = flask.request.get_json()
             info_response = self._handle_request_info(request)
             return info_response.to_flask_response()
         
-        @self.app.route('/search', methods=['POST'])
-        def search():
+        @self.app.route('/action', methods=['POST'])
+        def action():
             request = flask.request.get_json()
-            search_response = self._handle_request_search(request)
-            return search_response.to_flask_response()
+            action_response = self._handle_request_action(request)
+            return action_response.to_flask_response()
 
         # launch http server
         global server
         from eventlet import wsgi, listen
         server = listen(('0.0.0.0', http_port))
         wsgi.server(server, self.app)
+
+    def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
+        '''
+            upload file to kasumi oss
+            return url
+            exception will be raised if upload failed
+        '''
+        from .upload import upload_bytes_with_upload_url, request_upload_url
+        url = request_upload_url(filename, self._config.get_app_id(), self._config.get_search_key(), self._config.get_kasumi_url())
+        return upload_bytes_with_upload_url(url, file, content_type)
