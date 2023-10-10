@@ -350,8 +350,15 @@ class Kasumi(AbstractKasumi):
         self._sessions[ident] = session
 
         action_param = request.get('action_param','{}')
-        action_name = action_param.get('action_name','')
+        action_name = request.get('action_name','')
+        if action_name == '' or action_param == '{}' or action_param == '' or action_param is None:
+            return KasumiActionResponse(
+                code=200, message="OK", data=[KasumiActionResult.load_from_dict({
+                    "result": "action_name or action_param cannot be empty"
+                })]
+            )
 
+        action_param = json.loads(action_param)
         results = self._config.get_action_strategy().action(self, action_name, action_param)
         if ident in self._sessions:
             del self._sessions[ident]
