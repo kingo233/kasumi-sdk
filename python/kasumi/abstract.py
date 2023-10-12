@@ -144,6 +144,37 @@ class AbstractKasumiActionResult(ABC):
     def __str__(self) -> str:
         return str(self.to_dict())
 
+class AbstractKasumiBeforeChatEvent(ABC):
+    _interrupted: bool = False
+    _transfer_to: str = ""
+    _replace_origin: bool = False
+    _origin_content: str = ""
+    _history: List[Dict[str, str]] = None
+
+    def __init__(self, interrupted: bool = False, transfer_to: str = "", replace: bool = False):
+        self._interrupted = interrupted
+        self._transfer_to = transfer_to
+        self._replace = replace
+
+    def interrupt(self):
+        self._interrupted = True
+
+    def transfer_to(self, transfer_to: str):
+        self._transfer_to = transfer_to
+
+    def replace_origin(self):
+        self._replace_origin = True
+
+    def get_origin_content(self) -> str:
+        return self._origin_content
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "interrupted": self._interrupted,
+            "transfer_to": self._transfer_to,
+            "replace_origin": self._replace_origin,
+        }
+
 class AbstractKasumiAction(ABC):
     app: AbstractKasumi = None
 
@@ -293,6 +324,10 @@ class AbstractKasumi(ABC):
 
     @abstractmethod
     def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
+        pass
+
+    @abstractmethod
+    def before_chat(self, event: AbstractKasumiBeforeChatEvent):
         pass
 
 class AbstractKasumiEmbedding(ABC):
