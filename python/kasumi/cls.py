@@ -9,6 +9,7 @@ import json
 from typing import List, Dict, Any, Tuple, Union
 from .abstract import *
 from .embedding import KasumiEmbedding
+from .utils import KasumiUtils
 
 import threading
 
@@ -270,10 +271,12 @@ class Kasumi(AbstractKasumi):
     _config: KasumiConfigration = None
     _actions: List[AbstractKasumiAction] = []
     _sessions: Dict[int, KasumiSession] = {}
+    _utils: KasumiUtils = None
     _embedding: AbstractKasumiEmbedding = KasumiEmbedding()
 
     def __init__(self, config: KasumiConfigration):
         self._config = config
+        self._utils = KasumiUtils(self)
 
     def embeding_text(self, text: str) -> List[float]:
         ident = threading.get_ident()
@@ -336,6 +339,31 @@ class Kasumi(AbstractKasumi):
         return KasumiInfoResponse(
             code=200, message="OK", data=desc,
         )
+    
+    def _handle_request_before_chat(self, request: Dict[str, Any]) -> KasumiActionResponse:
+        if request.get('remote_search_key') != self._config.get_search_key():
+            return KasumiActionResponse(
+                code=401, message="Unauthorized", data=[]
+            )
+
+        ident = threading.get_ident()
+        token = request.get('token', '')
+        session = KasumiSession()
+        session._user_token = token
+        self._sessions[ident] = session
+
+        origin_content = request.get('origin_content', '')
+        history = request.get('history', [])
+
+        event = AbstractKasumiBeforeChatEvent(False, origin_content, False)
+        event._origin_content = origin_content
+        event._history = history
+
+        self.before_chat(event=event)
+
+        return KasumiActionResponse(
+            code=200, message="OK", data=event.to_dict()
+        )
 
     def _handle_request_action(self, request: Dict[str, Any]) -> KasumiActionResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
@@ -382,7 +410,13 @@ class Kasumi(AbstractKasumi):
             request = flask.request.get_json()
             action_response = self._handle_request_action(request)
             return action_response.to_flask_response()
-
+        
+        @self.app.route('/before_chat', methods=['POST'])
+        def before_chat():
+            request = flask.request.get_json()
+            action_response = self._handle_request_before_chat(request)
+            return action_response.to_flask_response()
+        
         # launch http server
         global server
         from eventlet import wsgi, listen
