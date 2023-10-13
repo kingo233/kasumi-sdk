@@ -8,7 +8,7 @@ class KasumiUtils:
     def __init__(self, app: AbstractKasumi) -> None:
         self._app = app
 
-    def llm_summary(self, content: str, count: int) -> str:
+    def llm_summary(self, content: str, prompt: str) -> str:
         '''
             summary content by llm, raise KasumiException if failed
             @param content: content to summary
@@ -22,14 +22,16 @@ class KasumiUtils:
                 session = self._app._sessions[threading.get_ident()]
                 response = post(f"{url}/v1/sdk/llm_summary", data={
                     "app_id": self._app._config.get_app_id(),
-                    "app_secret": self._app._config.get_search_key(),
+                    "key": self._app._config.get_search_key(),
+                    "token": session._user_token,
+                    "token_type": TokenType.ENCRYPTION.value,
                     "content": content,
-                    "count": count
+                    "prompt": prompt
                 })
             else:
                 raise KasumiException("User not logged in.")
             if response.status_code == 200:
-                return response.json()["summary"]
+                return response.json()["data"]["summary"]
             else:
                 raise KasumiException(f"Failed to summary content by llm due to {response.text}")
         except Exception as e:

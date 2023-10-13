@@ -282,6 +282,35 @@ class AbstractKasumiInfoResponse(ABC):
             mimetype="application/json"
         )
 
+class AbstractKasumiBeforeChatResponse(ABC):
+    _code: int = 0
+    _message: str = ""
+    _data: Dict[str, Any]
+
+    @abstractmethod
+    def __init__(self, code: int, message: str, data: Dict[str, Any]):
+        pass
+
+    @abstractmethod
+    def get_code(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_message(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_data(self) -> Dict[str, Any]:
+        pass
+
+    def to_flask_response(self) -> flask.Response:
+        data = json.dumps(self._data)
+        return flask.Response(
+            response=data,
+            status=self.get_code(),
+            mimetype="application/json"
+        )
+
 class AbstractKasumiSession(object):
     _user_token: str = ""
 
@@ -326,9 +355,8 @@ class AbstractKasumi(ABC):
     def upload_file(self, file: bytes, filename: str, content_type: str = 'application/octet-stream') -> str:
         pass
 
-    @abstractmethod
     def before_chat(self, event: AbstractKasumiBeforeChatEvent):
-        pass
+        raise KasumiException("before_chat function is not implemented.")
 
 class AbstractKasumiEmbedding(ABC):
     @abstractmethod
