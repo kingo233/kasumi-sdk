@@ -1,17 +1,6 @@
-from examples.summary_content.summary import *
-from examples.summary_content.config import *
+from examples.ppt_helper.summary import *
 from requests import post
 from json import loads
-
-def test_before_hook():
-    app = KasumiServer(KasumiConfigration(
-        kasumi_url="http://127.0.0.1:8192",
-        app_id=66,
-        search_key=KEY,
-        token=''
-    ))
-
-    app.run_forever(3433)
 
 prompt = '''
 你是一个PPT制作助手，你精通如何总结通过长文本制作PPT，现在总结下面的Markdown文档为PPT，以1000字左右的篇幅。

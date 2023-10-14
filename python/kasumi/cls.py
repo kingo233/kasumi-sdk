@@ -355,6 +355,8 @@ class Kasumi(AbstractKasumi):
             desc += '\nparams example: %s' % json.dumps(action.param_template)
             desc += '\n\n'
 
+        desc += '\n\nformat of params of your action call shoud be the same as the example above. do not format your params yourself.'
+
         return KasumiInfoResponse(
             code=200, message="OK", data=desc,
         )
@@ -404,7 +406,7 @@ class Kasumi(AbstractKasumi):
                     "result": "action_name or action_param cannot be empty"
                 })]
             )
-
+        action_param = action_param.replace('\n', '\\n')
         action_param = json.loads(action_param)
         results = self._config.get_action_strategy().action(self, action_name, action_param)
         if ident in self._sessions:
