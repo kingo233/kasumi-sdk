@@ -257,6 +257,25 @@ class KasumiInfoResponse(AbstractKasumiInfoResponse):
     def get_data(self) -> Dict[str, Any]:
         return self._data
 
+class KasumiBeforeChatResponse(AbstractKasumiBeforeChatResponse):
+    _code: int = 0
+    _message: str = ""
+    _data: Dict[str, Any]
+
+    def __init__(self, code: int, message: str, data: Dict[str, Any]):
+        self._code = code
+        self._message = message
+        self._data = data
+
+    def get_code(self) -> int:
+        return self._code
+    
+    def get_message(self) -> str:
+        return self._message
+    
+    def get_data(self) -> Dict[str, Any]:
+        return self._data
+
 class KasumiSession(AbstractKasumiSession):
     _user_token: str = ""
 
@@ -340,9 +359,9 @@ class Kasumi(AbstractKasumi):
             code=200, message="OK", data=desc,
         )
     
-    def _handle_request_before_chat(self, request: Dict[str, Any]) -> KasumiActionResponse:
+    def _handle_request_before_chat(self, request: Dict[str, Any]) -> KasumiBeforeChatResponse:
         if request.get('remote_search_key') != self._config.get_search_key():
-            return KasumiActionResponse(
+            return KasumiBeforeChatResponse(
                 code=401, message="Unauthorized", data=[]
             )
 
@@ -361,7 +380,7 @@ class Kasumi(AbstractKasumi):
 
         self.before_chat(event=event)
 
-        return KasumiActionResponse(
+        return KasumiBeforeChatResponse(
             code=200, message="OK", data=event.to_dict()
         )
 
