@@ -21,7 +21,7 @@ class KasumiServer(Kasumi):
             content = self._utils.llm_summary(origin, prompt)
         event.transfer_to(content)
 
-class Action(AbstractKasumiAction):
+class SlidesGenerator(AbstractKasumiAction):
     @property
     def name(self) -> str:
         return 'generate_ppt'
@@ -32,17 +32,19 @@ class Action(AbstractKasumiAction):
     
     @property
     def description(self) -> str:
-        return 'create a ppt from a reveal.js markdown format content, '
+        return 'create a powerpoint slide from a reveal.js markdown format content, accept markdown_text and template as param.'\
+        'template only accept one of [research_report,business_plan]'
     
     @property
     def param_template(self) -> Dict[str, str]:
-        return {'markdown_text': 'reveal.js format markdown text'}
+        return {'markdown_text': 'reveal.js format markdown text','template': 'research_report'}
     
     def action(self, search_param: Dict) -> List[AbstractKasumiActionResult]:
         markdown = search_param['markdown_text']
+        template = search_param['template']
         result = []
         try:
-            ppt_content = create_ppt(markdown)
+            ppt_content = create_ppt(markdown, template)
             url = self.app.upload_file(ppt_content, 'ppt.pptx', 'application/pptx')
             file = KasumiActionResult.get_file_dict(
                 content_type='application/pptx',
@@ -69,6 +71,6 @@ def ppt():
         search_key=KEY,
         token=''
     ))
-    app.add_action(Action())
+    app.add_action(SlidesGenerator())
 
     app.run_forever(3433)

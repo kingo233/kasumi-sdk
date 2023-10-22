@@ -2,11 +2,11 @@ from subprocess import call
 from random import randint
 from time import time
 
-def create_ppt(markdown_text: str) -> bytes:
+def create_ppt(markdown_text: str, template: str) -> bytes:
     identifier = str(int(time() * 1000)) + str((randint(0, 1000)))
-    in_file = f'ppt/in/{identifier}.md'
+    in_file = f'temp/{identifier}.md'
     out_file = f'ppt/out/{identifier}.pptx'
-    template_file = f'ppt/templates/template4.pptx'
+    template_file = f'ppt/templates/{template}.pptx'
 
     with open(in_file, 'w') as f:
         f.write(markdown_text)
